@@ -1,0 +1,3 @@
+# Property-based tests directory
+# Property tests verify universal properties that should hold across all inputs
+# Each test should run a minimum of 100 iterations using fast-check

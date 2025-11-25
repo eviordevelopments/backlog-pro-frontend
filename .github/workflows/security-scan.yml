@@ -1,0 +1,339 @@
+# Security Scanning Workflow for Backlog Pro - Agile Suite
+# 
+# Purpose: Automates security vulnerability scanning and dependency auditing
+# Triggers: Runs on push, pull requests, scheduled weekly scans, and manual dispatch
+# 
+# Requirements Validated:
+# - 3.1: Documents all workflow files and their purposes
+# - 3.4: Documents security analysis tools and automated fixes
+
+name: Security Scanning
+
+# Trigger Conditions
+# - push: Scans on every push to main branch
+# - pull_request: Scans PRs to catch vulnerabilities before merge
+# - schedule: Weekly automated scans (every Monday at 9 AM UTC)
+# - workflow_dispatch: Manual triggering for on-demand security audits
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    # Runs every Monday at 9:00 AM UTC (cron format: minute hour day month weekday)
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+# Permissions required for security scanning and automated fixes
+# These permissions allow the workflow to:
+# - Read repository contents
+# - Write security alerts
+# - Create pull requests for automated fixes
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+jobs:
+  # Job 1: Dependency Vulnerability Scanning
+  # Scans npm dependencies for known security vulnerabilities
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Step 1: Checkout Repository
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      # Step 2: Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+      
+      # Step 3: Install Dependencies
+      # Required to generate package-lock.json for accurate scanning
+      - name: Install dependencies
+        run: npm ci
+      
+      # Step 4: Run npm audit
+      # Checks for known vulnerabilities in dependencies
+      # Audit Levels: info, low, moderate, high, critical
+      # 
+      # Failure Handling:
+      # - continue-on-error: true allows workflow to continue even with vulnerabilities
+      # - This prevents blocking builds for low-severity issues
+      # - High/critical vulnerabilities are reported but don't fail the build
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+      
+      # Step 5: Generate Audit Report
+      # Creates a detailed JSON report of all vulnerabilities
+      # Report includes: severity, package name, vulnerable versions, remediation
+      - name: Generate audit report
+        run: |
+          echo "Generating detailed security audit report..."
+          npm audit --json > audit-report.json || true
+          echo "Audit report generated: audit-report.json"
+      
+      # Step 6: Upload Audit Report as Artifact
+      # Saves the report for review and historical tracking
+      - name: Upload audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-audit-report
+          path: audit-report.json
+          retention-days: 30
+      
+      # Step 7: Display Audit Summary
+      # Shows a human-readable summary in the workflow logs
+      - name: Display audit summary
+        run: |
+          echo "=== Security Audit Summary ==="
+          npm audit || true
+          echo "=============================="
+          echo "Full report available in artifacts"
+
+  # Job 2: Dependency Review (PR only)
+  # Analyzes dependency changes in pull requests
+  # Identifies new vulnerabilities introduced by dependency updates
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      # GitHub Dependency Review Action
+      # Compares dependencies between base and head branches
+      # Blocks PRs that introduce high/critical vulnerabilities
+      # 
+      # Configuration:
+      # - fail-on-severity: Minimum severity to fail the check (low, moderate, high, critical)
+      # - allow-licenses: List of acceptable licenses
+      # - deny-licenses: List of prohibited licenses
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high  # Fail on high or critical vulnerabilities
+          # Uncomment to enforce license policies:
+          # allow-licenses: MIT, Apache-2.0, BSD-3-Clause
+          # deny-licenses: GPL-3.0, AGPL-3.0
+
+  # Job 3: CodeQL Security Analysis
+  # Advanced semantic code analysis to detect security vulnerabilities
+  # Identifies: SQL injection, XSS, path traversal, etc.
+  codeql-analysis:
+    name: CodeQL Security Analysis
+    runs-on: ubuntu-latest
+    
+    # CodeQL requires specific permissions
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        # Languages to analyze
+        # CodeQL supports: javascript, typescript, python, java, cpp, csharp, go, ruby
+        language: ['javascript']
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      # Step 1: Initialize CodeQL
+      # Sets up CodeQL analysis environment
+      # Downloads CodeQL database and queries
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # Query suites to run:
+          # - default: Standard security queries
+          # - security-extended: Additional security checks
+          # - security-and-quality: Security + code quality
+          queries: security-extended
+      
+      # Step 2: Autobuild
+      # Automatically builds the project for analysis
+      # For JavaScript/TypeScript, this typically runs npm install
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+      
+      # Step 3: Perform CodeQL Analysis
+      # Runs security queries against the codebase
+      # Results are uploaded to GitHub Security tab
+      # 
+      # Reporting:
+      # - Findings appear in Security > Code scanning alerts
+      # - Alerts include severity, description, and remediation guidance
+      # - Can be configured to block PRs with high-severity findings
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  # Job 4: Secret Scanning
+  # Detects accidentally committed secrets (API keys, tokens, passwords)
+  secret-scan:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history to scan all commits
+      
+      # TruffleHog Secret Scanner
+      # Scans git history for accidentally committed secrets
+      # Detects: API keys, passwords, tokens, private keys, etc.
+      # 
+      # Detection Methods:
+      # - Regex patterns for common secret formats
+      # - Entropy analysis for high-randomness strings
+      # - Verified secrets (checks if credentials are valid)
+      - name: TruffleHog Secret Scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          # Scan the entire git history
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          # Only report verified secrets (reduces false positives)
+          extra_args: --only-verified
+
+  # Job 5: Automated Dependency Updates (Dependabot)
+  # Note: Dependabot is configured via .github/dependabot.yml (separate file)
+  # This job documents the automated fix process
+  # 
+  # Dependabot Configuration:
+  # Create .github/dependabot.yml with:
+  # 
+  # version: 2
+  # updates:
+  #   - package-ecosystem: "npm"
+  #     directory: "/"
+  #     schedule:
+  #       interval: "weekly"
+  #     open-pull-requests-limit: 10
+  #     reviewers:
+  #       - "your-github-username"
+  #     assignees:
+  #       - "your-github-username"
+  #     labels:
+  #       - "dependencies"
+  #       - "security"
+  #     # Auto-merge minor and patch updates
+  #     versioning-strategy: increase
+  # 
+  # Dependabot automatically:
+  # - Scans for outdated dependencies
+  # - Creates PRs with version updates
+  # - Includes changelog and release notes
+  # - Can auto-merge low-risk updates
+
+# Security Scanning Tools Summary
+# 
+# 1. npm audit
+#    - Purpose: Scans npm dependencies for known vulnerabilities
+#    - Database: npm advisory database
+#    - Output: JSON report with severity levels
+#    - Frequency: Every push, PR, and weekly
+# 
+# 2. Dependency Review Action
+#    - Purpose: Reviews dependency changes in PRs
+#    - Database: GitHub Advisory Database
+#    - Output: PR check with vulnerability details
+#    - Frequency: Every pull request
+# 
+# 3. CodeQL
+#    - Purpose: Semantic code analysis for security vulnerabilities
+#    - Database: CodeQL query database
+#    - Output: Security alerts in GitHub Security tab
+#    - Frequency: Every push, PR, and weekly
+# 
+# 4. TruffleHog
+#    - Purpose: Detects accidentally committed secrets
+#    - Database: Pattern matching + entropy analysis
+#    - Output: Workflow failure if secrets found
+#    - Frequency: Every push and PR
+
+# Automated Fixes
+# 
+# 1. Dependabot (requires .github/dependabot.yml):
+#    - Automatically creates PRs for dependency updates
+#    - Includes security patches and version upgrades
+#    - Can be configured to auto-merge low-risk updates
+# 
+# 2. npm audit fix:
+#    - Manual command: npm audit fix
+#    - Automatically updates dependencies to patched versions
+#    - Use npm audit fix --force for breaking changes
+# 
+# 3. CodeQL Auto-fix (GitHub Advanced Security):
+#    - Some CodeQL alerts include suggested fixes
+#    - Can be applied directly from the Security tab
+
+# Reporting and Notifications
+# 
+# Security findings are reported in multiple locations:
+# 
+# 1. GitHub Security Tab:
+#    - Navigate to Security > Code scanning alerts
+#    - View all CodeQL findings with severity and remediation
+# 
+# 2. Pull Request Checks:
+#    - Dependency Review shows vulnerability changes
+#    - CodeQL analysis results appear as PR checks
+# 
+# 3. Workflow Artifacts:
+#    - npm audit reports saved as artifacts
+#    - Download from Actions > Workflow run > Artifacts
+# 
+# 4. Email Notifications:
+#    - Configure in GitHub Settings > Notifications
+#    - Receive alerts for new security vulnerabilities
+# 
+# 5. Dependabot Alerts:
+#    - Navigate to Security > Dependabot alerts
+#    - Shows all vulnerable dependencies with fix suggestions
+
+# Failure Handling
+# 
+# - npm audit: Continues on failure (continue-on-error: true)
+#   - Allows builds to proceed with known vulnerabilities
+#   - Vulnerabilities are reported but don't block deployment
+# 
+# - Dependency Review: Fails on high/critical vulnerabilities in PRs
+#   - Blocks merge until vulnerabilities are resolved
+#   - Can be overridden by repository admins
+# 
+# - CodeQL: Reports findings but doesn't fail workflow
+#   - Findings appear in Security tab for review
+#   - Can be configured to block PRs (requires GitHub Advanced Security)
+# 
+# - Secret Scan: Fails if verified secrets are found
+#   - Prevents accidental credential exposure
+#   - Requires removing secrets and rotating credentials
+
+# Best Practices
+# 
+# 1. Review security alerts regularly (weekly recommended)
+# 2. Keep dependencies up to date (use Dependabot)
+# 3. Address high/critical vulnerabilities immediately
+# 4. Test dependency updates before merging
+# 5. Never commit secrets (use environment variables)
+# 6. Rotate credentials if secrets are accidentally committed
+# 7. Enable branch protection rules to require security checks
+# 8. Configure auto-merge for low-risk Dependabot PRs

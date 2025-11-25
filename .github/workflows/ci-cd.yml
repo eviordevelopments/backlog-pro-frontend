@@ -1,0 +1,302 @@
+# CI/CD Workflow for Backlog Pro - Agile Suite
+# 
+# Purpose: Automates the build, test, and deployment pipeline for the application
+# Triggers: Runs on push to main branch, pull requests, and manual workflow dispatch
+# 
+# Requirements Validated:
+# - 3.1: Documents all workflow files and their purposes
+# - 3.2: Describes complete deployment pipeline from commit to production
+# - 3.3: Documents build commands, environment variables, and configuration
+
+name: CI/CD Pipeline
+
+# Trigger Conditions
+# - push: Runs when code is pushed to the main branch
+# - pull_request: Runs when a PR is opened or updated against main
+# - workflow_dispatch: Allows manual triggering from GitHub Actions UI
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Environment Variables
+# These can be set at the repository level in GitHub Settings > Secrets and variables > Actions
+env:
+  NODE_VERSION: '20.x'  # Node.js version to use for builds
+  BUILD_MODE: 'production'  # Build mode (production or development)
+
+jobs:
+  # Job 1: Build and Test
+  # Validates code quality, runs linter, and builds the application
+  build:
+    name: Build and Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Step 1: Checkout Repository
+      # Fetches the latest code from the repository
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for proper versioning
+      
+      # Step 2: Setup Node.js
+      # Installs the specified Node.js version and configures npm caching
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'  # Caches npm dependencies for faster builds
+      
+      # Step 3: Install Dependencies
+      # Installs all project dependencies from package.json
+      # Uses 'npm ci' for clean, reproducible installs in CI environments
+      - name: Install dependencies
+        run: npm ci
+      
+      # Step 4: Run Linter
+      # Executes ESLint to check code quality and style compliance
+      # Failure Handling: If linting fails, the workflow stops here
+      - name: Run linter
+        run: npm run lint
+        continue-on-error: false  # Fail the build if linting fails
+      
+      # Step 5: Build Application (Production)
+      # Compiles the application using Vite for production deployment
+      # Output: Creates optimized static files in the 'dist' directory
+      - name: Build application
+        run: npm run build
+        env:
+          # Environment variables required for build
+          # Add any required build-time environment variables here
+          # Example: VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          NODE_ENV: production
+      
+      # Step 6: Upload Build Artifacts
+      # Saves the build output for use in deployment job
+      # Artifacts are retained for 7 days by default
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+      
+      # Step 7: Build Size Report (Optional)
+      # Analyzes and reports the size of the production build
+      - name: Analyze build size
+        run: |
+          echo "Build completed successfully!"
+          echo "Build size:"
+          du -sh dist/
+          echo "Detailed breakdown:"
+          du -h dist/* | sort -h
+
+  # Job 2: Validate Documentation
+  # Validates that all documentation is complete and up-to-date
+  # Runs property-based tests to ensure code entities are documented
+  # Requirements: 8.2, 8.3
+  validate-docs:
+    name: Validate Documentation
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      # Run documentation validation tests
+      # These tests verify that all code entities, routes, CRUD methods,
+      # relationships, workflows, and environment variables are documented
+      - name: Run documentation property tests
+        run: npm run test:docs
+        continue-on-error: false  # Fail the build if documentation is incomplete
+      
+      # Run documentation validation script
+      # Validates markdown structure and completeness
+      - name: Run documentation validation script
+        run: npm run validate:docs
+        continue-on-error: false
+      
+      # Check for broken links in documentation
+      - name: Check documentation links
+        run: npm run check:links
+        continue-on-error: false
+      
+      # Report validation results
+      - name: Documentation validation summary
+        if: success()
+        run: |
+          echo "✅ Documentation validation passed!"
+          echo "All code entities are properly documented."
+          echo "All links are valid."
+          echo "Markdown standards are met."
+      
+      - name: Documentation validation failed
+        if: failure()
+        run: |
+          echo "❌ Documentation validation failed!"
+          echo "Please ensure all code entities are documented."
+          echo "Run 'npm run docs:validate' locally to see detailed errors."
+          exit 1
+
+  # Job 3: Run Tests (Placeholder)
+  # Currently, no tests are implemented in the project
+  # This job is prepared for future test integration
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: build  # Runs after build job completes
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      # Placeholder for test execution
+      # When tests are added, uncomment and configure:
+      # - name: Run unit tests
+      #   run: npm run test
+      # 
+      # - name: Run integration tests
+      #   run: npm run test:integration
+      # 
+      # - name: Upload test coverage
+      #   uses: codecov/codecov-action@v4
+      #   with:
+      #     files: ./coverage/coverage-final.json
+      
+      - name: Tests placeholder
+        run: echo "No tests configured yet. Add test scripts to package.json and uncomment test steps."
+
+  # Job 4: Deploy to Production
+  # Deploys the built application to the hosting platform
+  # Only runs on pushes to main branch (not on PRs)
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build, validate-docs, test]  # Runs only after build, documentation validation, and test jobs succeed
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    # Deployment environment configuration
+    # Configure this in GitHub Settings > Environments
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}  # Will be set by deployment step
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      # Download the build artifacts from the build job
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      
+      # Deployment Step
+      # Configure based on your hosting platform:
+      # 
+      # For Vercel:
+      # - name: Deploy to Vercel
+      #   id: deploy
+      #   uses: amondnet/vercel-action@v25
+      #   with:
+      #     vercel-token: ${{ secrets.VERCEL_TOKEN }}
+      #     vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+      #     vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+      #     vercel-args: '--prod'
+      # 
+      # For Netlify:
+      # - name: Deploy to Netlify
+      #   id: deploy
+      #   uses: nwtgck/actions-netlify@v3
+      #   with:
+      #     publish-dir: './dist'
+      #     production-deploy: true
+      #     github-token: ${{ secrets.GITHUB_TOKEN }}
+      #     deploy-message: "Deploy from GitHub Actions"
+      #   env:
+      #     NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      #     NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+      # 
+      # For GitHub Pages:
+      # - name: Deploy to GitHub Pages
+      #   uses: peaceiris/actions-gh-pages@v4
+      #   with:
+      #     github_token: ${{ secrets.GITHUB_TOKEN }}
+      #     publish_dir: ./dist
+      
+      - name: Deployment placeholder
+        id: deploy
+        run: |
+          echo "Deployment step - configure based on your hosting platform"
+          echo "See inline comments for Vercel, Netlify, or GitHub Pages examples"
+          echo "url=https://your-app-url.com" >> $GITHUB_OUTPUT
+      
+      # Post-deployment verification (optional)
+      - name: Verify deployment
+        run: |
+          echo "Deployment completed!"
+          echo "Application should be available at: ${{ steps.deploy.outputs.url }}"
+
+# Required Secrets and Variables
+# Configure these in GitHub Settings > Secrets and variables > Actions:
+# 
+# Secrets (sensitive data):
+# - VERCEL_TOKEN: Vercel authentication token (if using Vercel)
+# - VERCEL_ORG_ID: Vercel organization ID (if using Vercel)
+# - VERCEL_PROJECT_ID: Vercel project ID (if using Vercel)
+# - NETLIFY_AUTH_TOKEN: Netlify authentication token (if using Netlify)
+# - NETLIFY_SITE_ID: Netlify site ID (if using Netlify)
+# - VITE_API_URL: API endpoint URL (if using external APIs)
+# - VITE_SUPABASE_URL: Supabase project URL (if using Supabase)
+# - VITE_SUPABASE_ANON_KEY: Supabase anonymous key (if using Supabase)
+# 
+# Variables (non-sensitive configuration):
+# - NODE_VERSION: Node.js version (default: 20.x)
+# - BUILD_MODE: Build mode (default: production)
+
+# Failure Handling
+# - If any step fails, the workflow stops and marks the run as failed
+# - Failed builds prevent deployment (deploy job won't run)
+# - Failed documentation validation prevents deployment (deploy job won't run)
+# - Pull requests show build status, blocking merge if checks fail
+# - Email notifications sent to commit author on failure (configurable in GitHub settings)
+# - Workflow can be re-run manually from the Actions tab
+
+# Documentation Validation (Requirements 8.2, 8.3)
+# - Documentation validation runs on all pull requests and pushes
+# - Validates that all code entities (interfaces, types, methods) are documented
+# - Checks that all routes, CRUD operations, and relationships are documented
+# - Verifies markdown formatting standards are met
+# - Checks for broken links in documentation
+# - Blocks merge if documentation is incomplete or invalid
+# - Run 'npm run docs:validate' locally before pushing to catch issues early
+
+# Performance Optimizations
+# - npm caching reduces dependency installation time
+# - Artifacts allow sharing build output between jobs
+# - Jobs run in parallel when possible (build, validate-docs, and test are independent)
+# - continue-on-error: false ensures fast failure on critical steps

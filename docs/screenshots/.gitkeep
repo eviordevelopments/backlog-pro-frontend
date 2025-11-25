@@ -1,0 +1,31 @@
+# Screenshots Directory
+
+This directory should contain screenshots referenced in the End User Guide.
+
+## Required Screenshots
+
+The following screenshot files are referenced in the documentation and should be added:
+
+1. `01-launch-screen.png` - Application launch screen
+2. `02-dashboard-overview.png` - Complete dashboard view
+3. `03-tasks-page.png` - Tasks page interface
+4. `04-create-task-dialog.png` - Task creation form
+5. `05-task-created.png` - Task list with new task
+6. `06-kanban-board.png` - Kanban board view
+7. `07-kanban-drag-drop.png` - Drag and drop action
+8. `08-create-sprint-dialog.png` - Sprint creation form
+9. `09-sprint-created.png` - Sprint list view
+10. `10-assign-task-sprint.png` - Task assignment to sprint
+11. `11-team-profiles.png` - Team profiles page
+12. `12-devops-metrics.png` - DevOps metrics dashboard
+
+## Screenshot Guidelines
+
+- **Resolution**: 1920x1080
+- **Format**: PNG
+- **Content**: Clean state with representative data
+- **Update**: When UI changes are made
+
+## Note
+
+Screenshots are optional for documentation but enhance user understanding. The documentation is complete and functional without them.
