@@ -1,27 +1,59 @@
-import bcrypt from 'bcrypt';
+const GRAPHQL_ENDPOINT = 'https://backlog-pro-backend.onrender.com/graphql';
 
-export async function POST(req: Request) {
+const SIGNIN_MUTATION = `
+  mutation Signin($input: SigninInput!) {
+    signin(input: $input) {
+      token
+      userId
+      email
+      name
+    }
+  }
+`;
+
+export interface SigninInput {
+  email: string;
+  password: string;
+}
+
+export interface SigninResponse {
+  token: string;
+  userId: string;
+  email: string;
+  name: string;
+}
+
+export async function signin(input: SigninInput): Promise<SigninResponse> {
   try {
-    const { plainPassword, hash } = await req.json();
+    const response = await fetch(GRAPHQL_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query: SIGNIN_MUTATION,
+        variables: { input },
+      }),
+    });
 
-    if (!plainPassword || !hash) {
-      return new Response(
-        JSON.stringify({ error: 'Missing password or hash' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const valid = await bcrypt.compare(plainPassword, hash);
+    const result = await response.json();
 
-    return new Response(
-      JSON.stringify({ valid }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
-    );
+    if (result.errors) {
+      const errorMessage = result.errors[0]?.message || 'Signin failed';
+      throw new Error(errorMessage);
+    }
+
+    if (!result.data?.signin) {
+      throw new Error('No signin data returned');
+    }
+
+    return result.data.signin;
   } catch (error) {
-    console.error('Password verification error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Password verification failed', valid: false }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
+    console.error('Signin error:', error);
+    throw error;
   }
 }

@@ -1,4 +1,8 @@
-import { useApp } from "@/context/AppContext";
+import { useState } from "react";
+import { useProjectContext } from "@/context/ProjectContext";
+import { useClientContext } from "@/context/ClientContext";
+import { Project } from "@/api/projects/projects";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -6,134 +10,209 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { Plus, FolderKanban } from "lucide-react";
-import { useState } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  Select as SelectComponent,
+  SelectContent as SelectContentComponent,
+  SelectItem as SelectItemComponent,
+  SelectTrigger as SelectTriggerComponent,
+  SelectValue as SelectValueComponent,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { Plus, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
-export const ProjectSelector = () => {
-  const { projects, currentProject, setCurrentProject, addProject } = useApp();
-  const [isOpen, setIsOpen] = useState(false);
-  const [newProject, setNewProject] = useState({
-    name: "",
-    description: "",
-    color: "#5b7cfc",
+const createProjectSchema = z.object({
+  name: z.string().min(2, "Project name must be at least 2 characters"),
+  description: z.string().optional(),
+  clientId: z.string().min(1, "Client ID is required"),
+  budget: z.coerce.number().min(0, "Budget must be positive").optional(),
+});
+
+type CreateProjectFormValues = z.infer<typeof createProjectSchema>;
+
+export function ProjectSelector() {
+  const { projects, selectedProject, setSelectedProject, loading, createNewProject } = useProjectContext();
+  const { clients } = useClientContext();
+  const { toast } = useToast();
+  const [creating, setCreating] = useState(false);
+  const [openCreate, setOpenCreate] = useState(false);
+
+  const form = useForm<CreateProjectFormValues>({
+    resolver: zodResolver(createProjectSchema),
+    defaultValues: {
+      name: "",
+      description: "",
+      clientId: "",
+      budget: 0,
+    },
   });
 
-  const handleCreateProject = () => {
-    if (newProject.name.trim()) {
-      addProject({
-        id: crypto.randomUUID(),
-        name: newProject.name,
-        description: newProject.description,
-        color: newProject.color,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+  const onSubmit = async (data: CreateProjectFormValues) => {
+    try {
+      setCreating(true);
+      const newProject = await createNewProject({
+        name: data.name,
+        clientId: data.clientId,
+        description: data.description,
+        budget: data.budget,
       });
-      setNewProject({ name: "", description: "", color: "#5b7cfc" });
-      setIsOpen(false);
+      setSelectedProject(newProject.id);
+      form.reset();
+      setOpenCreate(false);
+      toast({
+        title: "Success",
+        description: "Project created successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create project",
+        variant: "destructive",
+      });
+    } finally {
+      setCreating(false);
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        <span className="text-sm text-muted-foreground">Loading projects...</span>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-2">
-      <Select
-        value={currentProject?.id}
-        onValueChange={(value) => {
-          const project = projects.find((p) => p.id === value);
-          if (project) setCurrentProject(project);
-        }}
-      >
-        <SelectTrigger className="w-[200px]">
-          <div className="flex items-center gap-2">
-            <FolderKanban className="h-4 w-4" />
-            <SelectValue placeholder="Seleccionar proyecto" />
-          </div>
-        </SelectTrigger>
-        <SelectContent>
-          {projects.map((project) => (
-            <SelectItem key={project.id} value={project.id}>
-              <div className="flex items-center gap-2">
-                <div
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: project.color }}
-                />
+      {loading ? (
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span className="text-sm text-muted-foreground">Loading...</span>
+        </div>
+      ) : projects.length > 0 ? (
+        <Select value={selectedProject?.id || ""} onValueChange={setSelectedProject}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Select a project" />
+          </SelectTrigger>
+          <SelectContent>
+            {projects.map((project) => (
+              <SelectItem key={project.id} value={project.id}>
                 {project.name}
-              </div>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : (
+        <span className="text-sm text-muted-foreground">No projects yet</span>
+      )}
 
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <Dialog open={openCreate} onOpenChange={setOpenCreate}>
         <DialogTrigger asChild>
-          <Button size="icon" variant="outline">
+          <Button size="sm" variant="outline">
             <Plus className="h-4 w-4" />
           </Button>
         </DialogTrigger>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Crear Nuevo Proyecto</DialogTitle>
+            <DialogTitle>Create New Project</DialogTitle>
+            <DialogDescription>Add a new project to your portfolio</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="name">Nombre del Proyecto</Label>
-              <Input
-                id="name"
-                value={newProject.name}
-                onChange={(e) =>
-                  setNewProject({ ...newProject, name: e.target.value })
-                }
-                placeholder="Mi Proyecto"
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Project Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="E-commerce Platform" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-            <div>
-              <Label htmlFor="description">Descripción</Label>
-              <Textarea
-                id="description"
-                value={newProject.description}
-                onChange={(e) =>
-                  setNewProject({ ...newProject, description: e.target.value })
-                }
-                placeholder="Descripción del proyecto..."
+
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Project description" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-            <div>
-              <Label htmlFor="color">Color</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="color"
-                  type="color"
-                  value={newProject.color}
-                  onChange={(e) =>
-                    setNewProject({ ...newProject, color: e.target.value })
-                  }
-                  className="w-20 h-10"
-                />
-                <Input
-                  value={newProject.color}
-                  onChange={(e) =>
-                    setNewProject({ ...newProject, color: e.target.value })
-                  }
-                  placeholder="#5b7cfc"
-                />
-              </div>
-            </div>
-            <Button onClick={handleCreateProject} className="w-full">
-              Crear Proyecto
-            </Button>
-          </div>
+
+              <FormField
+                control={form.control}
+                name="clientId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Client</FormLabel>
+                    <SelectComponent onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTriggerComponent>
+                          <SelectValueComponent placeholder="Select a client" />
+                        </SelectTriggerComponent>
+                      </FormControl>
+                      <SelectContentComponent>
+                        {clients.map((client) => (
+                          <SelectItemComponent key={client.id} value={client.id}>
+                            {client.name} ({client.email})
+                          </SelectItemComponent>
+                        ))}
+                      </SelectContentComponent>
+                    </SelectComponent>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="budget"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Budget ($)</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="50000" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <Button type="submit" disabled={creating} className="w-full">
+                {creating ? "Creating..." : "Create Project"}
+              </Button>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
     </div>
   );
-};
+}

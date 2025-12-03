@@ -1,71 +1,60 @@
-import bcrypt from 'bcrypt';
-import { supabase } from '@/integrations/supabase/client';
+const GRAPHQL_ENDPOINT = 'https://backlog-pro-backend.onrender.com/graphql';
 
-export async function POST(req: Request) {
+const SIGNUP_MUTATION = `
+  mutation Signup($input: SignupInput!) {
+    signup(input: $input) {
+      token
+      userId
+      email
+      name
+    }
+  }
+`;
+
+export interface SignupInput {
+  email: string;
+  password: string;
+  name: string;
+}
+
+export interface SignupResponse {
+  token: string;
+  userId: string;
+  email: string;
+  name: string;
+}
+
+export async function signup(input: SignupInput): Promise<SignupResponse> {
   try {
-    const { email, password, name } = await req.json();
-
-    if (!email || !password || !name) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    if (password.length < 8) {
-      return new Response(
-        JSON.stringify({ error: 'Password must be at least 8 characters' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    if (name.trim().length < 2) {
-      return new Response(
-        JSON.stringify({ error: 'Name must be at least 2 characters' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Hash password with bcrypt
-    const passwordHash = await bcrypt.hash(password, 12);
-
-    // Insert into users table
-    const { data, error } = await supabase
-      .from('users')
-      .insert({
-        email,
-        password_hash: passwordHash,
-        name: name.trim(),
-        role: 'Developer',
-        is_active: true,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      if (error.message.includes('duplicate') || error.message.includes('unique')) {
-        return new Response(
-          JSON.stringify({ error: 'Email already registered' }),
-          { status: 409, headers: { 'Content-Type': 'application/json' } }
-        );
-      }
-      throw error;
-    }
-
-    return new Response(
-      JSON.stringify({
-        id: data.id,
-        email: data.email,
-        name: data.name,
-        role: data.role,
+    const response = await fetch(GRAPHQL_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query: SIGNUP_MUTATION,
+        variables: { input },
       }),
-      { status: 201, headers: { 'Content-Type': 'application/json' } }
-    );
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.errors) {
+      const errorMessage = result.errors[0]?.message || 'Signup failed';
+      throw new Error(errorMessage);
+    }
+
+    if (!result.data?.signup) {
+      throw new Error('No signup data returned');
+    }
+
+    return result.data.signup;
   } catch (error) {
-    console.error('Registration error:', error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Registration failed' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
+    console.error('Signup error:', error);
+    throw error;
   }
 }

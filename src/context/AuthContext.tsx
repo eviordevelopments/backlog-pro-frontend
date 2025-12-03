@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { User as SupabaseUser } from "@supabase/supabase-js";
+import { signup, SignupInput } from "@/api/auth/register";
+import { signin, SigninInput } from "@/api/auth/verify-password";
+import { requestPasswordReset, RequestPasswordResetInput } from "@/api/auth/password-reset";
+import { getProfile, updateProfile, updateAvatar, UserProfile, UpdateProfileInput, UpdateAvatarInput } from "@/api/user/profile";
 
 // User interface matching design document
 export interface User {
@@ -43,6 +45,10 @@ export interface AuthContextType {
   logout: () => Promise<void>;
   clearError: () => void;
   isAuthenticated: boolean;
+  requestPasswordReset: (email: string) => Promise<{ resetToken: string; expiresIn: string }>;
+  getProfile: () => Promise<UserProfile>;
+  updateProfile: (input: UpdateProfileInput) => Promise<UserProfile>;
+  updateAvatar: (avatarUrl: string) => Promise<UserProfile>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -147,33 +153,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             });
           }
         }
-        
-        // Also check Supabase session
-        const { data: { session: supabaseSession }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          throw sessionError;
-        }
-        
-        if (supabaseSession?.user) {
-          // Restore from Supabase session
-          const restoredUser: User = {
-            id: supabaseSession.user.id,
-            email: supabaseSession.user.email || "",
-            name: supabaseSession.user.user_metadata?.name || supabaseSession.user.email?.split("@")[0] || "User",
-            createdAt: supabaseSession.user.created_at || new Date().toISOString(),
-          };
-          
-          setUser(restoredUser);
-          
-          // Update localStorage session
-          const newSession: Session = {
-            user: restoredUser,
-            accessToken: supabaseSession.access_token,
-            expiresAt: supabaseSession.expires_at ? supabaseSession.expires_at * 1000 : Date.now() + 3600000,
-          };
-          localStorage.setItem("auth_session", JSON.stringify(newSession));
-        }
       } catch (error) {
         console.error("Error restoring session:", error);
         localStorage.removeItem("auth_session");
@@ -196,33 +175,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setLoading(true);
       clearError(); // Clear any previous errors
       
-      // Call Supabase signInWithPassword
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      if (!data.user || !data.session) {
-        throw new Error("Authentication failed");
-      }
+      // Call GraphQL signin mutation
+      const signinInput: SigninInput = { email, password };
+      const response = await signin(signinInput);
 
       // Create user object
       const authenticatedUser: User = {
-        id: data.user.id,
-        email: data.user.email || "",
-        name: data.user.user_metadata?.name || data.user.email?.split("@")[0] || "User",
-        createdAt: data.user.created_at || new Date().toISOString(),
+        id: response.userId,
+        email: response.email,
+        name: response.name,
+        createdAt: new Date().toISOString(),
       };
 
       // Store session data in localStorage (Requirement 2.1)
       const session: Session = {
         user: authenticatedUser,
-        accessToken: data.session.access_token,
-        expiresAt: data.session.expires_at ? data.session.expires_at * 1000 : Date.now() + 3600000,
+        accessToken: response.token,
+        expiresAt: Date.now() + 3600000, // 1 hour expiration
       };
       localStorage.setItem("auth_session", JSON.stringify(session));
 
@@ -257,80 +226,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         throw new Error("Name must be at least 2 characters");
       }
 
-      console.log("Attempting to register with email:", email);
-
-      // Call Supabase signUp with email confirmation disabled
-      const { data, error } = await supabase.auth.signUp({
+      // Call GraphQL signup mutation
+      const signupInput: SignupInput = {
         email,
         password,
-        options: {
-          data: {
-            name: name.trim(),
-          },
-          emailRedirectTo: undefined, // Don't redirect for email confirmation
-        },
-      });
-
-      console.log("Supabase signUp response:", { data, error });
-
-      if (error) {
-        // Handle duplicate email errors (Requirement 5.3)
-        if (error.message.includes("already registered") || error.message.includes("already exists") || error.message.includes("User already registered")) {
-          throw new Error("An account with this email already exists");
-        }
-        throw new Error(error.message);
-      }
-
-      if (!data.user) {
-        throw new Error("Registration failed - no user data returned");
-      }
-
-      // Check if email confirmation is required (session will be null if confirmation is needed)
-      if (!data.session) {
-        // Email confirmation is required - user needs to check their email
-        throw new Error("Please check your email to confirm your account before logging in");
-      }
-
-      // After successful auth user creation, create TeamMember record in database (Requirements 9.1, 9.2)
-      try {
-        const { error: teamMemberError } = await supabase
-          .from("team_members")
-          .insert({
-            id: data.user.id,
-            name: name.trim(),
-            email: email,
-            role: "Developer", // Default role
-          });
-
-        if (teamMemberError) {
-          // Handle TeamMember creation errors
-          console.error("Error creating TeamMember record:", teamMemberError);
-          
-          // If TeamMember creation fails, we should clean up the auth user
-          // However, Supabase doesn't provide a way to delete users from client side
-          // So we'll throw an error and let the user know
-          throw new Error(`Account created but team member setup failed: ${teamMemberError.message}. Please contact support.`);
-        }
-
-        console.log("TeamMember record created successfully");
-      } catch (teamMemberError) {
-        // Re-throw TeamMember creation errors
-        throw teamMemberError;
-      }
+        name: name.trim(),
+      };
+      const response = await signup(signupInput);
 
       // Auto-login user after successful registration (Requirement 5.4)
       const newUser: User = {
-        id: data.user.id,
-        email: data.user.email || "",
-        name: name.trim(),
-        createdAt: data.user.created_at || new Date().toISOString(),
+        id: response.userId,
+        email: response.email,
+        name: response.name,
+        createdAt: new Date().toISOString(),
       };
 
       // Store session data
       const session: Session = {
         user: newUser,
-        accessToken: data.session.access_token,
-        expiresAt: data.session.expires_at ? data.session.expires_at * 1000 : Date.now() + 3600000,
+        accessToken: response.token,
+        expiresAt: Date.now() + 3600000, // 1 hour expiration
       };
       localStorage.setItem("auth_session", JSON.stringify(session));
 
@@ -354,9 +270,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setLoading(true);
       clearError(); // Clear any errors on logout
       
-      // Call Supabase signOut
-      await supabase.auth.signOut();
-
       // Clear session from localStorage
       localStorage.removeItem("auth_session");
 
@@ -364,7 +277,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setUser(null);
     } catch (error) {
       console.error("Error during logout:", error);
-      // Even if Supabase signOut fails, clear local state
+      // Even if something fails, clear local state
       localStorage.removeItem("auth_session");
       setUser(null);
       
@@ -373,6 +286,70 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setError(authError);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Request password reset function
+  const requestPasswordResetFn = async (email: string): Promise<{ resetToken: string; expiresIn: string }> => {
+    try {
+      clearError();
+      const input: RequestPasswordResetInput = { email };
+      return await requestPasswordReset(input);
+    } catch (error) {
+      const authError = createAuthError(error);
+      setError(authError);
+      throw error;
+    }
+  };
+
+  // Get user profile function
+  const getProfileFn = async (): Promise<UserProfile> => {
+    try {
+      clearError();
+      const sessionData = localStorage.getItem("auth_session");
+      if (!sessionData) {
+        throw new Error("No active session");
+      }
+      const session: Session = JSON.parse(sessionData);
+      return await getProfile(session.accessToken);
+    } catch (error) {
+      const authError = createAuthError(error);
+      setError(authError);
+      throw error;
+    }
+  };
+
+  // Update user profile function
+  const updateProfileFn = async (input: UpdateProfileInput): Promise<UserProfile> => {
+    try {
+      clearError();
+      const sessionData = localStorage.getItem("auth_session");
+      if (!sessionData) {
+        throw new Error("No active session");
+      }
+      const session: Session = JSON.parse(sessionData);
+      return await updateProfile(session.accessToken, input);
+    } catch (error) {
+      const authError = createAuthError(error);
+      setError(authError);
+      throw error;
+    }
+  };
+
+  // Update user avatar function
+  const updateAvatarFn = async (avatarUrl: string): Promise<UserProfile> => {
+    try {
+      clearError();
+      const sessionData = localStorage.getItem("auth_session");
+      if (!sessionData) {
+        throw new Error("No active session");
+      }
+      const session: Session = JSON.parse(sessionData);
+      return await updateAvatar(session.accessToken, { avatarUrl });
+    } catch (error) {
+      const authError = createAuthError(error);
+      setError(authError);
+      throw error;
     }
   };
 
@@ -389,6 +366,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         logout,
         clearError,
         isAuthenticated,
+        requestPasswordReset: requestPasswordResetFn,
+        getProfile: getProfileFn,
+        updateProfile: updateProfileFn,
+        updateAvatar: updateAvatarFn,
       }}
     >
       {children}

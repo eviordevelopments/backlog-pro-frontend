@@ -13,10 +13,11 @@ import {
   LogOut,
   User,
   Video,
+  Briefcase,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/context/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   Sidebar,
   SidebarContent,
@@ -42,6 +43,7 @@ import { Button } from "@/components/ui/button";
 
 const menuItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Projects", url: "/projects", icon: Briefcase },
   { title: "Tasks", url: "/tasks", icon: ListTodo },
   { title: "Kanban Board", url: "/kanban", icon: KanbanSquare },
   { title: "Sprints", url: "/sprints", icon: CalendarDays },
@@ -143,9 +145,11 @@ export function AppSidebar() {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>My Account</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem disabled>
-              <User className="mr-2 h-4 w-4" />
-              <span>Profile</span>
+            <DropdownMenuItem asChild>
+              <Link to="/profile" className="flex items-center cursor-pointer">
+                <User className="mr-2 h-4 w-4" />
+                <span>Profile</span>
+              </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem

@@ -5,11 +5,16 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { AppProvider } from "./context/AppContext";
+import { ProjectProvider } from "./context/ProjectContext";
+import { ClientProvider } from "./context/ClientContext";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { LoadingScreen } from "./components/auth/LoadingScreen";
 import { AppLayout } from "./components/layout/AppLayout";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import Profile from "./pages/Profile";
+import Projects from "./pages/Projects";
 import Dashboard from "./pages/Dashboard";
 import Tasks from "./pages/Tasks";
 import Kanban from "./pages/Kanban";
@@ -42,10 +47,13 @@ const AppRoutes = () => {
         {/* Unprotected routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         
         {/* Protected routes */}
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/projects" element={<Projects />} />
           <Route path="/tasks" element={<Tasks />} />
           <Route path="/kanban" element={<Kanban />} />
           <Route path="/sprints" element={<Sprints />} />
@@ -70,13 +78,17 @@ const AppRoutes = () => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
-      <AppProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <AppRoutes />
-        </TooltipProvider>
-      </AppProvider>
+      <ProjectProvider>
+        <ClientProvider>
+          <AppProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <AppRoutes />
+            </TooltipProvider>
+          </AppProvider>
+        </ClientProvider>
+      </ProjectProvider>
     </AuthProvider>
   </QueryClientProvider>
 );
