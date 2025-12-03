@@ -10,9 +10,22 @@ import {
   ProfitShare,
   KPIMetrics,
   Project,
+  FinancialRecord,
+  BudgetAllocation,
+  FundAccount,
+  FinancialMetrics,
+  FinancialPeriod,
 } from "@/types";
 import { initializeSampleData } from "@/utils/sampleData";
 import { useAuth } from "./AuthContext";
+import { PeriodType, aggregateFinancialData } from "@/utils/financialPeriods";
+import {
+  calculateCAC,
+  calculateLTV,
+  calculateCashRunway,
+  calculateBurnRate,
+  calculateChurnRate,
+} from "@/api/finances/finances";
 
 interface AppContextType {
   projects: Project[];
@@ -27,6 +40,13 @@ interface AppContextType {
   risks: Risk[];
   profitShares: ProfitShare[];
   kpiMetrics: KPIMetrics;
+  financialRecords: FinancialRecord[];
+  budgetAllocations: BudgetAllocation[];
+  fundAccounts: FundAccount[];
+  financialMetrics: FinancialMetrics;
+  currentPeriodType: PeriodType;
+  setCurrentPeriodType: (period: PeriodType) => void;
+  aggregatedFinancialData: FinancialPeriod[];
   addTask: (task: Task) => void;
   updateTask: (id: string, task: Partial<Task>) => void;
   deleteTask: (id: string) => void;
@@ -43,6 +63,16 @@ interface AppContextType {
   deleteRisk: (id: string) => void;
   updateProfitShares: (shares: ProfitShare[], totalRevenue?: number) => void;
   updateKPIMetrics: (metrics: Partial<KPIMetrics>) => void;
+  addFinancialRecord: (record: Omit<FinancialRecord, 'id'>) => void;
+  updateFinancialRecord: (id: string, record: Partial<Omit<FinancialRecord, 'id'>>) => void;
+  deleteFinancialRecord: (id: string) => void;
+  addBudgetAllocation: (allocation: BudgetAllocation) => void;
+  updateBudgetAllocation: (id: string, allocation: Partial<Omit<BudgetAllocation, 'id' | 'createdAt'>>) => void;
+  deleteBudgetAllocation: (id: string) => void;
+  addFundAccount: (fund: FundAccount) => void;
+  updateFundAccount: (id: string, fund: Partial<Omit<FundAccount, 'id'>>) => void;
+  deleteFundAccount: (id: string) => void;
+  updateFinancialMetrics: (metrics: Partial<FinancialMetrics>) => void;
   calculateSprintCommittedPoints: (sprintId: string) => number;
   calculateSprintProgress: (sprintId: string) => { remainingPoints: number; progressPercentage: number };
   calculateSprintVelocity: (sprintId: string) => number;
@@ -50,6 +80,11 @@ interface AppContextType {
   calculateTeamVelocity: () => number;
   calculateCycleTime: () => number;
   calculateCompletionRate: () => number;
+  calculateMetricsCAC: (marketingSpend: number, newCustomers: number) => number;
+  calculateMetricsLTV: (averageRevenuePerCustomer: number, retentionRate: number) => number;
+  calculateMetricsCashRunway: (cashBalance: number, monthlyBurnRate: number) => number;
+  calculateMetricsBurnRate: (totalExpenses: number, monthCount: number) => number;
+  calculateMetricsChurnRate: (lostCustomers: number, startingCustomers: number) => number;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -68,6 +103,14 @@ const initialKPIMetrics: KPIMetrics = {
   teamSatisfaction: 8.5,
 };
 
+const initialFinancialMetrics: FinancialMetrics = {
+  cac: 0,
+  ltv: 0,
+  cashRunway: 0,
+  burnRate: 0,
+  churnRate: 0,
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
@@ -84,6 +127,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const [allRisks, setAllRisks] = useState<Risk[]>([]);
   const [allProfitShares, setAllProfitShares] = useState<ProfitShare[]>([]);
   const [kpiMetrics, setKpiMetrics] = useState<KPIMetrics>(initialKPIMetrics);
+  const [allFinancialRecords, setAllFinancialRecords] = useState<FinancialRecord[]>([]);
+  const [allBudgetAllocations, setAllBudgetAllocations] = useState<BudgetAllocation[]>([]);
+  const [allFundAccounts, setAllFundAccounts] = useState<FundAccount[]>([]);
+  const [financialMetrics, setFinancialMetrics] = useState<FinancialMetrics>(initialFinancialMetrics);
+  const [currentPeriodType, setCurrentPeriodType] = useState<PeriodType>('monthly');
+  const [aggregatedFinancialData, setAggregatedFinancialData] = useState<FinancialPeriod[]>([]);
 
   // Filter data by authenticated user's ID (Requirement 8.4)
   const projects = userId ? allProjects.filter(p => p.userId === userId) : allProjects;
@@ -92,6 +141,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const sprints = userId ? allSprints.filter(s => s.userId === userId) : allSprints;
   const risks = userId ? allRisks.filter(r => r.userId === userId) : allRisks;
   const profitShares = userId ? allProfitShares.filter(p => p.userId === userId) : allProfitShares;
+  const financialRecords = userId ? allFinancialRecords.filter(r => r.userId === userId) : allFinancialRecords;
+  const budgetAllocations = userId ? allBudgetAllocations.filter(a => a.userId === userId) : allBudgetAllocations;
+  const fundAccounts = userId ? allFundAccounts.filter(f => f.id) : allFundAccounts;
 
   // Load from localStorage on app initialization (Requirement 10.4)
   useEffect(() => {
@@ -107,6 +159,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     const savedRisks = localStorage.getItem("risks");
     const savedProfitShares = localStorage.getItem("profitShares");
     const savedKpiMetrics = localStorage.getItem("kpiMetrics");
+    const savedFinancialRecords = localStorage.getItem("financialRecords");
+    const savedBudgetAllocations = localStorage.getItem("budgetAllocations");
+    const savedFundAccounts = localStorage.getItem("fundAccounts");
+    const savedFinancialMetrics = localStorage.getItem("financialMetrics");
 
     if (savedProjects) {
       const parsedProjects = JSON.parse(savedProjects);
@@ -117,19 +173,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       } else if (parsedProjects.length > 0) {
         setCurrentProject(parsedProjects[0]);
       }
-    } else {
-      // Create a default project
-      const defaultProject: Project = {
-        id: "default-project",
-        name: "Proyecto Principal",
-        description: "Proyecto de demostración",
-        color: "#5b7cfc",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        userId: userId || '', // Will be migrated later
-      };
-      setAllProjects([defaultProject]);
-      setCurrentProject(defaultProject);
     }
 
     if (savedTasks) setAllTasks(JSON.parse(savedTasks));
@@ -139,6 +182,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     if (savedRisks) setAllRisks(JSON.parse(savedRisks));
     if (savedProfitShares) setAllProfitShares(JSON.parse(savedProfitShares));
     if (savedKpiMetrics) setKpiMetrics(JSON.parse(savedKpiMetrics));
+    if (savedFinancialRecords) setAllFinancialRecords(JSON.parse(savedFinancialRecords));
+    if (savedBudgetAllocations) setAllBudgetAllocations(JSON.parse(savedBudgetAllocations));
+    if (savedFundAccounts) setAllFundAccounts(JSON.parse(savedFundAccounts));
+    if (savedFinancialMetrics) setFinancialMetrics(JSON.parse(savedFinancialMetrics));
   }, []);
 
   // Listen for logout events and clear user-specific data (Requirement 7.5)
@@ -288,6 +335,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     localStorage.setItem("kpiMetrics", JSON.stringify(kpiMetrics));
   }, [kpiMetrics]);
+
+  useEffect(() => {
+    localStorage.setItem("financialRecords", JSON.stringify(allFinancialRecords));
+  }, [allFinancialRecords]);
+
+  useEffect(() => {
+    localStorage.setItem("budgetAllocations", JSON.stringify(allBudgetAllocations));
+  }, [allBudgetAllocations]);
+
+  useEffect(() => {
+    localStorage.setItem("fundAccounts", JSON.stringify(allFundAccounts));
+  }, [allFundAccounts]);
+
+  useEffect(() => {
+    localStorage.setItem("financialMetrics", JSON.stringify(financialMetrics));
+  }, [financialMetrics]);
+
+  // Aggregate financial data based on period type (Requirements 1.2, 1.3, 1.4)
+  useEffect(() => {
+    const aggregated = aggregateFinancialData(financialRecords, currentPeriodType, 12);
+    setAggregatedFinancialData(aggregated);
+  }, [financialRecords, currentPeriodType]);
 
   const addTask = (task: Task) => {
     // Validate story points are non-negative numeric values
@@ -708,6 +777,134 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     setKpiMetrics({ ...kpiMetrics, ...metrics });
   };
 
+  // Financial Record CRUD Operations
+  const addFinancialRecord = (record: Omit<FinancialRecord, 'id'>) => {
+    if (!record.date || record.date.trim() === '') {
+      throw new Error('Financial record date is required');
+    }
+    if (!record.type || !['income', 'expense'].includes(record.type)) {
+      throw new Error('Financial record type must be "income" or "expense"');
+    }
+    if (typeof record.amount !== 'number' || record.amount < 0 || !isFinite(record.amount)) {
+      throw new Error('Financial record amount must be a non-negative number');
+    }
+    if (!record.category || record.category.trim() === '') {
+      throw new Error('Financial record category is required');
+    }
+    if (!record.projectId || record.projectId.trim() === '') {
+      throw new Error('Financial record projectId is required');
+    }
+    if (!record.description || record.description.trim() === '') {
+      throw new Error('Financial record description is required');
+    }
+
+    const newRecord: FinancialRecord = {
+      ...record,
+      id: `record-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    };
+
+    setAllFinancialRecords([...allFinancialRecords, newRecord]);
+  };
+
+  const updateFinancialRecord = (id: string, updates: Partial<Omit<FinancialRecord, 'id'>>) => {
+    if (updates.amount !== undefined) {
+      if (typeof updates.amount !== 'number' || updates.amount < 0 || !isFinite(updates.amount)) {
+        throw new Error('Financial record amount must be a non-negative number');
+      }
+    }
+    if (updates.type !== undefined) {
+      if (!['income', 'expense'].includes(updates.type)) {
+        throw new Error('Financial record type must be "income" or "expense"');
+      }
+    }
+
+    setAllFinancialRecords(prevRecords =>
+      prevRecords.map(r => (r.id === id ? { ...r, ...updates } : r))
+    );
+  };
+
+  const deleteFinancialRecord = (id: string) => {
+    setAllFinancialRecords(prevRecords => prevRecords.filter(r => r.id !== id));
+  };
+
+  // Budget Allocation CRUD Operations
+  const addBudgetAllocation = (allocation: BudgetAllocation) => {
+    if (typeof allocation.totalBudget !== 'number' || allocation.totalBudget < 0 || !isFinite(allocation.totalBudget)) {
+      throw new Error('Total budget must be a non-negative number');
+    }
+
+    const fundNames = ['technology', 'growth', 'team', 'marketing', 'emergency', 'investments'];
+    let totalPercentage = 0;
+
+    for (const fund of fundNames) {
+      const amount = allocation.allocations[fund as keyof typeof allocation.allocations];
+      if (typeof amount !== 'number' || amount < 0 || !isFinite(amount)) {
+        throw new Error(`Fund ${fund} allocation must be a non-negative number`);
+      }
+      totalPercentage += (amount / allocation.totalBudget) * 100;
+    }
+
+    if (Math.abs(totalPercentage - 100) > 0.01) {
+      throw new Error('Fund allocations must sum to 100% of total budget');
+    }
+
+    setAllBudgetAllocations([...allBudgetAllocations, allocation]);
+  };
+
+  const updateBudgetAllocation = (id: string, updates: Partial<Omit<BudgetAllocation, 'id' | 'createdAt'>>) => {
+    if (updates.totalBudget !== undefined) {
+      if (typeof updates.totalBudget !== 'number' || updates.totalBudget < 0 || !isFinite(updates.totalBudget)) {
+        throw new Error('Total budget must be a non-negative number');
+      }
+    }
+
+    setAllBudgetAllocations(prevAllocations =>
+      prevAllocations.map(a => (a.id === id ? { ...a, ...updates } : a))
+    );
+  };
+
+  const deleteBudgetAllocation = (id: string) => {
+    setAllBudgetAllocations(prevAllocations => prevAllocations.filter(a => a.id !== id));
+  };
+
+  // Fund Account CRUD Operations
+  const addFundAccount = (fund: FundAccount) => {
+    if (typeof fund.percentage !== 'number' || fund.percentage < 0 || fund.percentage > 100 || !isFinite(fund.percentage)) {
+      throw new Error('Fund percentage must be between 0 and 100');
+    }
+    if (typeof fund.balance !== 'number' || fund.balance < 0 || !isFinite(fund.balance)) {
+      throw new Error('Fund balance must be a non-negative number');
+    }
+
+    setAllFundAccounts([...allFundAccounts, fund]);
+  };
+
+  const updateFundAccount = (id: string, updates: Partial<Omit<FundAccount, 'id'>>) => {
+    if (updates.balance !== undefined) {
+      if (typeof updates.balance !== 'number' || updates.balance < 0 || !isFinite(updates.balance)) {
+        throw new Error('Fund balance must be a non-negative number');
+      }
+    }
+    if (updates.percentage !== undefined) {
+      if (typeof updates.percentage !== 'number' || updates.percentage < 0 || updates.percentage > 100 || !isFinite(updates.percentage)) {
+        throw new Error('Fund percentage must be between 0 and 100');
+      }
+    }
+
+    setAllFundAccounts(prevFunds =>
+      prevFunds.map(f => (f.id === id ? { ...f, ...updates } : f))
+    );
+  };
+
+  const deleteFundAccount = (id: string) => {
+    setAllFundAccounts(prevFunds => prevFunds.filter(f => f.id !== id));
+  };
+
+  // Financial Metrics Operations
+  const updateFinancialMetrics = (metrics: Partial<FinancialMetrics>) => {
+    setFinancialMetrics({ ...financialMetrics, ...metrics });
+  };
+
   // Helper function: Calculate total committed points from assigned tasks (Requirement 4.3)
   const calculateSprintCommittedPoints = (sprintId: string): number => {
     return tasks
@@ -794,6 +991,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     return (tasksCompletedOnTime / tasksWithEstimates.length) * 100;
   };
 
+  // Financial Metrics Calculation Methods (Requirements 3.2, 3.3, 3.4, 3.5, 3.6)
+  const calculateMetricsCAC = (marketingSpend: number, newCustomers: number): number => {
+    return calculateCAC(marketingSpend, newCustomers);
+  };
+
+  const calculateMetricsLTV = (averageRevenuePerCustomer: number, retentionRate: number): number => {
+    return calculateLTV(averageRevenuePerCustomer, retentionRate);
+  };
+
+  const calculateMetricsCashRunway = (cashBalance: number, monthlyBurnRate: number): number => {
+    return calculateCashRunway(cashBalance, monthlyBurnRate);
+  };
+
+  const calculateMetricsBurnRate = (totalExpenses: number, monthCount: number): number => {
+    return calculateBurnRate(totalExpenses, monthCount);
+  };
+
+  const calculateMetricsChurnRate = (lostCustomers: number, startingCustomers: number): number => {
+    return calculateChurnRate(lostCustomers, startingCustomers);
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -809,6 +1027,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         risks,
         profitShares,
         kpiMetrics,
+        financialRecords,
+        budgetAllocations,
+        fundAccounts,
+        financialMetrics,
+        currentPeriodType,
+        setCurrentPeriodType,
+        aggregatedFinancialData,
         addTask,
         updateTask,
         deleteTask,
@@ -825,6 +1050,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         deleteRisk,
         updateProfitShares,
         updateKPIMetrics,
+        addFinancialRecord,
+        updateFinancialRecord,
+        deleteFinancialRecord,
+        addBudgetAllocation,
+        updateBudgetAllocation,
+        deleteBudgetAllocation,
+        addFundAccount,
+        updateFundAccount,
+        deleteFundAccount,
+        updateFinancialMetrics,
         calculateSprintCommittedPoints,
         calculateSprintProgress,
         calculateSprintVelocity,
@@ -832,6 +1067,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         calculateTeamVelocity,
         calculateCycleTime,
         calculateCompletionRate,
+        calculateMetricsCAC,
+        calculateMetricsLTV,
+        calculateMetricsCashRunway,
+        calculateMetricsBurnRate,
+        calculateMetricsChurnRate,
       }}
     >
       {children}

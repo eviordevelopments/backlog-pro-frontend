@@ -1,113 +1,118 @@
 const GRAPHQL_ENDPOINT = 'https://backlog-pro-backend.onrender.com/graphql';
 
+const LIST_PROJECTS_QUERY = `
+  query ListProjects {
+    listProjects {
+      id
+      name
+      description
+    }
+  }
+`;
+
 const CREATE_PROJECT_MUTATION = `
-  mutation CreateProject($input: CreateProjectDto!) {
+  mutation CreateProject($input: CreateProjectInput!) {
     createProject(input: $input) {
       id
       name
       description
-      clientId
-      status
-      budget
-      spent
-      progress
-      methodology
-      startDate
-      endDate
-      createdAt
-      updatedAt
-    }
-  }
-`;
-
-const GET_PROJECT_QUERY = `
-  query GetProject($projectId: String!) {
-    getProject(projectId: $projectId) {
-      id
-      name
-      description
-      clientId
-      status
-      budget
-      spent
-      progress
-      methodology
-      startDate
-      endDate
-      createdAt
-      updatedAt
-    }
-  }
-`;
-
-const LIST_PROJECTS_QUERY = `
-  query ListProjects($clientId: String) {
-    listProjects(clientId: $clientId) {
-      id
-      name
-      description
-      clientId
-      status
-      budget
-      spent
-      progress
-      createdAt
-      updatedAt
     }
   }
 `;
 
 const UPDATE_PROJECT_MUTATION = `
-  mutation UpdateProject($projectId: String!, $input: UpdateProjectDto!) {
-    updateProject(projectId: $projectId, input: $input) {
+  mutation UpdateProject($id: String!, $input: UpdateProjectDto!) {
+    updateProject(id: $id, input: $input) {
       id
       name
       description
-      status
-      budget
-      progress
-      updatedAt
     }
   }
 `;
-
-const DELETE_PROJECT_MUTATION = `
-  mutation DeleteProject($projectId: String!) {
-    deleteProject(projectId: $projectId)
-  }
-`;
-
-export interface CreateProjectInput {
-  name: string;
-  clientId: string;
-  description?: string;
-  budget?: number;
-  startDate?: string;
-}
-
-export interface UpdateProjectInput {
-  name?: string;
-  description?: string;
-  status?: string;
-  budget?: number;
-  progress?: number;
-  endDate?: string;
-}
 
 export interface Project {
   id: string;
   name: string;
   description?: string;
-  clientId: string;
-  status: string;
-  budget: number;
-  spent: number;
-  progress: number;
-  methodology?: string;
-  startDate: string;
-  endDate?: string;
-  createdAt: string;
-  updatedAt: string;
+}
+
+export interface CreateProjectInput {
+  name: string;
+  description?: string;
+}
+
+export interface UpdateProjectDto {
+  name?: string;
+  description?: string;
+}
+
+export async function updateProject(
+  token: string,
+  projectId: string,
+  input: UpdateProjectDto
+): Promise<any> {
+  try {
+    const response = await fetch(GRAPHQL_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        query: UPDATE_PROJECT_MUTATION,
+        variables: { id: projectId, input },
+      }),
+    });
+
+    const result = await response.json();
+
+    if (result.errors) {
+      const error = result.errors[0];
+      throw new Error(error.message || 'Failed to update project');
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    if (!result.data?.updateProject) {
+      throw new Error('No project data returned');
+    }
+
+    return result.data.updateProject;
+  } catch (error) {
+    throw error;
+  }
+}
+
+
+export async function listProjects(token: string): Promise<Project[]> {
+  try {
+    const response = await fetch(GRAPHQL_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        query: LIST_PROJECTS_QUERY,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'Failed to list projects');
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return result.data?.listProjects || [];
+  } catch (error) {
+    throw error;
+  }
 }
 
 export async function createProject(
@@ -129,16 +134,12 @@ export async function createProject(
 
     const result = await response.json();
 
-    if (!response.ok) {
-      const errorMessage = result.errors?.[0]?.message || `HTTP error! status: ${response.status}`;
-      console.error('GraphQL Error:', result.errors);
-      throw new Error(errorMessage);
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'Failed to create project');
     }
 
-    if (result.errors) {
-      const errorMessage = result.errors[0]?.message || 'Failed to create project';
-      console.error('GraphQL Error:', result.errors);
-      throw new Error(errorMessage);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     if (!result.data?.createProject) {
@@ -147,15 +148,22 @@ export async function createProject(
 
     return result.data.createProject;
   } catch (error) {
-    console.error('Create project error:', error);
     throw error;
   }
 }
 
-export async function getProject(
-  token: string,
-  projectId: string
-): Promise<Project> {
+
+const GET_PROJECT_QUERY = `
+  query GetProject($id: String!) {
+    getProject(id: $id) {
+      id
+      name
+      description
+    }
+  }
+`;
+
+export async function getProject(token: string, projectId: string): Promise<Project> {
   try {
     const response = await fetch(GRAPHQL_ENDPOINT, {
       method: 'POST',
@@ -165,118 +173,39 @@ export async function getProject(
       },
       body: JSON.stringify({
         query: GET_PROJECT_QUERY,
-        variables: { projectId },
+        variables: { id: projectId },
       }),
     });
+
+    const result = await response.json();
+
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'Failed to get project');
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const result = await response.json();
-
-    if (result.errors) {
-      const errorMessage = result.errors[0]?.message || 'Failed to fetch project';
-      throw new Error(errorMessage);
-    }
-
     if (!result.data?.getProject) {
-      throw new Error('No project data returned');
+      throw new Error('Project not found');
     }
 
     return result.data.getProject;
   } catch (error) {
-    console.error('Get project error:', error);
     throw error;
   }
 }
 
-export async function listProjects(
-  token: string,
-  clientId?: string
-): Promise<Project[]> {
-  try {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        query: LIST_PROJECTS_QUERY,
-        variables: { clientId: clientId || null },
-      }),
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      const errorMessage = result.errors?.[0]?.message || `HTTP error! status: ${response.status}`;
-      console.error('GraphQL Error:', result.errors);
-      throw new Error(errorMessage);
+const DELETE_PROJECT_MUTATION = `
+  mutation DeleteProject($id: String!) {
+    deleteProject(id: $id) {
+      id
     }
-
-    if (result.errors) {
-      const errorMessage = result.errors[0]?.message || 'Failed to fetch projects';
-      console.error('GraphQL Error:', result.errors);
-      throw new Error(errorMessage);
-    }
-
-    if (!result.data?.listProjects) {
-      return [];
-    }
-
-    return result.data.listProjects;
-  } catch (error) {
-    console.error('List projects error:', error);
-    throw error;
   }
-}
+`;
 
-export async function updateProject(
-  token: string,
-  projectId: string,
-  input: UpdateProjectInput
-): Promise<Project> {
-  try {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        query: UPDATE_PROJECT_MUTATION,
-        variables: { projectId, input },
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
-
-    if (result.errors) {
-      const errorMessage = result.errors[0]?.message || 'Failed to update project';
-      throw new Error(errorMessage);
-    }
-
-    if (!result.data?.updateProject) {
-      throw new Error('No updated project data returned');
-    }
-
-    return result.data.updateProject;
-  } catch (error) {
-    console.error('Update project error:', error);
-    throw error;
-  }
-}
-
-export async function deleteProject(
-  token: string,
-  projectId: string
-): Promise<boolean> {
+export async function deleteProject(token: string, projectId: string): Promise<void> {
   try {
     const response = await fetch(GRAPHQL_ENDPOINT, {
       method: 'POST',
@@ -286,24 +215,20 @@ export async function deleteProject(
       },
       body: JSON.stringify({
         query: DELETE_PROJECT_MUTATION,
-        variables: { projectId },
+        variables: { id: projectId },
       }),
     });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
 
     const result = await response.json();
 
     if (result.errors) {
-      const errorMessage = result.errors[0]?.message || 'Failed to delete project';
-      throw new Error(errorMessage);
+      throw new Error(result.errors[0]?.message || 'Failed to delete project');
     }
 
-    return result.data?.deleteProject || false;
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
   } catch (error) {
-    console.error('Delete project error:', error);
     throw error;
   }
 }

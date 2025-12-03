@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useApp } from '@/context/AppContext';
+import { useAuth } from '@/context/AuthContext';
+import { useProjectContext } from '@/context/ProjectContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,25 +10,15 @@ import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Plus, Target, CheckCircle2, Circle, Trash2, Edit } from 'lucide-react';
 import { toast } from 'sonner';
-
-interface Goal {
-  id: string;
-  projectId: string;
-  title: string;
-  description: string;
-  targetValue: number;
-  currentValue: number;
-  unit: string;
-  deadline: string;
-  status: 'not-started' | 'in-progress' | 'completed';
-  createdAt: string;
-}
+import { createGoal, updateGoalProgress, getUserGoals, Goal, CreateGoalDto } from '@/api/goals/goals';
 
 export default function ProjectGoals() {
-  const { currentProject } = useApp();
+  const { user } = useAuth();
+  const { selectedProject: currentProject } = useProjectContext();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [open, setOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
+  const [loading, setLoading] = useState(false);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -35,42 +26,62 @@ export default function ProjectGoals() {
     targetValue: 0,
     currentValue: 0,
     unit: '',
-    deadline: '',
+    startDate: new Date().toISOString().split('T')[0],
+    endDate: '',
+    type: 'team' as const,
+    category: 'productivity',
+    period: 'quarterly',
   });
 
-  // Load goals from localStorage
-  const loadGoals = () => {
-    const saved = localStorage.getItem('projectGoals');
-    if (saved) {
-      setGoals(JSON.parse(saved));
+  const getToken = (): string | null => {
+    const sessionData = localStorage.getItem('auth_session');
+    if (!sessionData) return null;
+    try {
+      const session = JSON.parse(sessionData);
+      return session.accessToken;
+    } catch {
+      return null;
     }
   };
 
-  useEffect(() => {
-    loadGoals();
+  // Load goals from backend
+  const loadGoals = async () => {
+    const token = getToken();
+    if (!token || !user) return;
     
-    const handleGoalsUpdate = () => {
-      loadGoals();
-    };
-    
-    window.addEventListener('goalsUpdated', handleGoalsUpdate);
-    
-    return () => {
-      window.removeEventListener('goalsUpdated', handleGoalsUpdate);
-    };
-  }, []);
-
-  // Save goals to localStorage
-  const saveGoals = (newGoals: Goal[]) => {
-    setGoals(newGoals);
-    localStorage.setItem('projectGoals', JSON.stringify(newGoals));
-    window.dispatchEvent(new Event('goalsUpdated'));
+    try {
+      setLoading(true);
+      const data = await getUserGoals(token, user.id);
+      setGoals(data);
+      // Also save to localStorage for offline access
+      localStorage.setItem('projectGoals', JSON.stringify(data));
+    } catch (error) {
+      console.error('Failed to load goals:', error);
+      // Fallback to localStorage
+      try {
+        const saved = localStorage.getItem('projectGoals');
+        if (saved) {
+          setGoals(JSON.parse(saved));
+        }
+      } catch (e) {
+        console.error('Failed to load from localStorage:', e);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Filter goals by current project
-  const projectGoals = currentProject
-    ? goals.filter(g => g.projectId === currentProject.id)
-    : goals;
+  // Save goals to localStorage
+  const saveGoalsLocal = (newGoals: Goal[]) => {
+    setGoals(newGoals);
+    localStorage.setItem('projectGoals', JSON.stringify(newGoals));
+  };
+
+  useEffect(() => {
+    if (user) {
+      loadGoals();
+    }
+  }, [user]);
 
   const resetForm = () => {
     setFormData({
@@ -79,99 +90,114 @@ export default function ProjectGoals() {
       targetValue: 0,
       currentValue: 0,
       unit: '',
-      deadline: '',
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: '',
+      type: 'team',
+      category: 'productivity',
+      period: 'quarterly',
     });
     setEditingGoal(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    const token = getToken();
+    if (!token || !user) {
+      toast.error('Not authenticated');
+      return;
+    }
+
     if (!currentProject) {
       toast.error('Please select a project first');
       return;
     }
 
-    const progress = formData.targetValue > 0 
-      ? (formData.currentValue / formData.targetValue) * 100 
-      : 0;
-    
-    const status: Goal['status'] = 
-      progress === 0 ? 'not-started' :
-      progress >= 100 ? 'completed' :
-      'in-progress';
-
-    if (editingGoal) {
-      // Update existing goal
-      const updatedGoals = goals.map(g => 
-        g.id === editingGoal.id 
-          ? { ...g, ...formData, status }
-          : g
-      );
-      saveGoals(updatedGoals);
-      toast.success('Goal updated successfully');
-    } else {
-      // Create new goal
-      const newGoal: Goal = {
-        id: Date.now().toString(),
-        projectId: currentProject.id,
-        ...formData,
-        status,
-        createdAt: new Date().toISOString(),
+    try {
+      setLoading(true);
+      
+      const input: CreateGoalDto = {
+        title: formData.title,
+        description: formData.description,
+        type: formData.type,
+        category: formData.category,
+        targetValue: formData.targetValue,
+        unit: formData.unit,
+        period: formData.period,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        ownerId: user.id,
       };
-      saveGoals([...goals, newGoal]);
+
+      const newGoal = await createGoal(token, input);
+      
+      // Add projectId locally
+      const goalWithProject = { ...newGoal, projectId: currentProject.id };
       toast.success('Goal created successfully');
+      
+      // Add to local storage
+      saveGoalsLocal([...goals, goalWithProject]);
+      
+      setOpen(false);
+      resetForm();
+    } catch (error) {
+      console.error('Failed to create goal:', error);
+      toast.error('Failed to create goal');
+    } finally {
+      setLoading(false);
     }
-    
-    setOpen(false);
-    resetForm();
   };
 
-  const handleEdit = (goal: Goal) => {
-    setEditingGoal(goal);
-    setFormData({
-      title: goal.title,
-      description: goal.description,
-      targetValue: goal.targetValue,
-      currentValue: goal.currentValue,
-      unit: goal.unit,
-      deadline: goal.deadline,
-    });
-    setOpen(true);
+  const handleDelete = async (id: string) => {
+    try {
+      setLoading(true);
+      const updatedGoals = goals.filter(g => g.id !== id);
+      saveGoalsLocal(updatedGoals);
+      toast.success('Goal deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete goal:', error);
+      toast.error('Failed to delete goal');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDelete = (id: string) => {
-    saveGoals(goals.filter(g => g.id !== id));
-    toast.success('Goal deleted successfully');
+  const handleUpdateProgress = async (goalId: string, newValue: number) => {
+    const token = getToken();
+    if (!token) {
+      toast.error('Not authenticated');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const updated = await updateGoalProgress(token, goalId, newValue);
+      
+      // Update local storage
+      const updatedGoals = goals.map(g => g.id === goalId ? updated : g);
+      saveGoalsLocal(updatedGoals);
+      
+      toast.success('Goal progress updated');
+    } catch (error) {
+      console.error('Failed to update goal progress:', error);
+      toast.error('Failed to update goal progress');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const updateProgress = (goalId: string, newValue: number) => {
-    const updatedGoals = goals.map(g => {
-      if (g.id === goalId) {
-        const progress = g.targetValue > 0 ? (newValue / g.targetValue) * 100 : 0;
-        const status: Goal['status'] = 
-          progress === 0 ? 'not-started' :
-          progress >= 100 ? 'completed' :
-          'in-progress';
-        return { ...g, currentValue: newValue, status };
-      }
-      return g;
-    });
-    saveGoals(updatedGoals);
-  };
-
-  const getStatusColor = (status: Goal['status']) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
         return 'text-success';
-      case 'in-progress':
+      case 'active':
         return 'text-primary';
       default:
         return 'text-muted-foreground';
     }
   };
 
-  const getStatusIcon = (status: Goal['status']) => {
+  const getStatusIcon = (status: string) => {
     return status === 'completed' ? CheckCircle2 : Circle;
   };
 
@@ -208,6 +234,7 @@ export default function ProjectGoals() {
                     placeholder="e.g., Reach 1000 users"
                     className="mt-2"
                     required
+                    disabled={loading}
                   />
                 </div>
 
@@ -219,6 +246,7 @@ export default function ProjectGoals() {
                     placeholder="Describe your goal..."
                     className="mt-2"
                     rows={3}
+                    disabled={loading}
                   />
                 </div>
 
@@ -231,41 +259,46 @@ export default function ProjectGoals() {
                       onChange={(e) => setFormData({ ...formData, targetValue: parseFloat(e.target.value) || 0 })}
                       className="mt-2"
                       required
+                      disabled={loading}
                     />
                   </div>
                   <div>
-                    <Label>Current Value</Label>
+                    <Label>Unit</Label>
                     <Input
-                      type="number"
-                      value={formData.currentValue}
-                      onChange={(e) => setFormData({ ...formData, currentValue: parseFloat(e.target.value) || 0 })}
+                      value={formData.unit}
+                      onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                      placeholder="e.g., users, $, tasks"
                       className="mt-2"
+                      disabled={loading}
                     />
                   </div>
                 </div>
 
-                <div>
-                  <Label>Unit</Label>
-                  <Input
-                    value={formData.unit}
-                    onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                    placeholder="e.g., users, $, tasks"
-                    className="mt-2"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Start Date</Label>
+                    <Input
+                      type="date"
+                      value={formData.startDate}
+                      onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                      className="mt-2"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div>
+                    <Label>End Date</Label>
+                    <Input
+                      type="date"
+                      value={formData.endDate}
+                      onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                      className="mt-2"
+                      disabled={loading}
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <Label>Deadline</Label>
-                  <Input
-                    type="date"
-                    value={formData.deadline}
-                    onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
-                    className="mt-2"
-                  />
-                </div>
-
-                <Button type="submit" className="w-full">
-                  {editingGoal ? 'Update Goal' : 'Create Goal'}
+                <Button type="submit" className="w-full" disabled={loading}>
+                  {loading ? 'Creating...' : 'Create Goal'}
                 </Button>
               </form>
             </DialogContent>
@@ -274,7 +307,7 @@ export default function ProjectGoals() {
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {projectGoals.map((goal) => {
+          {goals.filter(g => !currentProject || g.projectId === currentProject.id).map((goal) => {
             const progress = goal.targetValue > 0 
               ? Math.min((goal.currentValue / goal.targetValue) * 100, 100)
               : 0;
@@ -290,9 +323,9 @@ export default function ProjectGoals() {
                       {goal.description && (
                         <p className="text-sm text-muted-foreground mt-1">{goal.description}</p>
                       )}
-                      {goal.deadline && (
+                      {goal.endDate && (
                         <p className="text-xs text-muted-foreground mt-2">
-                          Deadline: {new Date(goal.deadline).toLocaleDateString()}
+                          Deadline: {new Date(goal.endDate).toLocaleDateString()}
                         </p>
                       )}
                     </div>
@@ -301,14 +334,8 @@ export default function ProjectGoals() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => handleEdit(goal)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
                       onClick={() => handleDelete(goal.id)}
+                      disabled={loading}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -327,9 +354,10 @@ export default function ProjectGoals() {
                     <Input
                       type="number"
                       value={goal.currentValue}
-                      onChange={(e) => updateProgress(goal.id, parseFloat(e.target.value) || 0)}
+                      onChange={(e) => handleUpdateProgress(goal.id, parseFloat(e.target.value) || 0)}
                       className="flex-1"
                       placeholder="Update progress"
+                      disabled={loading}
                     />
                     <span className="text-sm font-medium text-muted-foreground">
                       {progress.toFixed(0)}%
@@ -339,7 +367,7 @@ export default function ProjectGoals() {
               </div>
             );
           })}
-          {projectGoals.length === 0 && (
+          {goals.filter(g => !currentProject || g.projectId === currentProject.id).length === 0 && (
             <p className="text-center text-muted-foreground py-12">
               No goals yet. Add your first goal to track progress!
             </p>

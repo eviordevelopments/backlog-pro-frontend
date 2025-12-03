@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
+import { useProjectContext } from "@/context/ProjectContext";
+import { useSprints } from "@/hooks/use-sprints";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -28,13 +30,19 @@ import {
 } from "recharts";
 
 export default function Sprints() {
-  const { sprints, addSprint, updateSprint, tasks, userStories, currentProject } = useApp();
+  const { addSprint, tasks, userStories } = useApp();
+  const { projects, selectedProject: currentProject } = useProjectContext();
+  const { createSprint: createSprintAPI, listSprints: listSprintsAPI, getSprintMetrics: getSprintMetricsAPI } = useSprints();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [backendSprints, setBackendSprints] = useState<Sprint[]>([]);
+  const [sprintMetrics, setSprintMetrics] = useState<Record<string, any>>({});
   const [formData, setFormData] = useState({
     name: "",
     goal: "",
     startDate: "",
     endDate: "",
+    projectId: currentProject?.id || "",
     velocity: 0,
     committedPoints: 0,
     completedPoints: 0,
@@ -42,6 +50,46 @@ export default function Sprints() {
   });
 
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  // Load sprints from backend when component mounts or project changes
+  useEffect(() => {
+    const loadSprints = async () => {
+      try {
+        const data = await listSprintsAPI(currentProject?.id);
+        // Convert backend sprints to local Sprint type
+        const convertedSprints = data.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          goal: s.goal,
+          projectId: s.projectId,
+          startDate: s.startDate || new Date().toISOString().split('T')[0],
+          endDate: s.endDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          status: s.status as Sprint["status"],
+          velocity: 0,
+          committedPoints: 0,
+          completedPoints: 0,
+          userId: "",
+        }));
+        setBackendSprints(convertedSprints);
+
+        // Load metrics for each sprint
+        const metrics: Record<string, any> = {};
+        for (const sprint of convertedSprints) {
+          try {
+            const sprintMetrics = await getSprintMetricsAPI(sprint.id);
+            metrics[sprint.id] = sprintMetrics;
+          } catch (error) {
+            console.error(`Failed to load metrics for sprint ${sprint.id}:`, error);
+          }
+        }
+        setSprintMetrics(metrics);
+      } catch (error) {
+        console.error("Failed to load sprints:", error);
+      }
+    };
+
+    loadSprints();
+  }, [currentProject?.id, listSprintsAPI, getSprintMetricsAPI]);
 
   const validateForm = () => {
     const errors: Record<string, string> = {};
@@ -53,6 +101,10 @@ export default function Sprints() {
 
     if (!formData.goal.trim()) {
       errors.goal = "Sprint goal is required";
+    }
+
+    if (!formData.projectId) {
+      errors.projectId = "Project is required";
     }
 
     if (!formData.startDate) {
@@ -94,7 +146,7 @@ export default function Sprints() {
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Validate form
@@ -103,12 +155,32 @@ export default function Sprints() {
       return;
     }
 
+    setIsLoading(true);
     try {
+      // Call backend API to create sprint
+      const createdSprint = await createSprintAPI({
+        name: formData.name,
+        goal: formData.goal,
+        projectId: formData.projectId,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+      });
+
+      // Add to backend sprints list for immediate UI update
       const sprint: Sprint = {
-        ...formData,
-        projectId: currentProject?.id || "default-project",
-        id: Date.now().toString(),
+        id: createdSprint.id,
+        name: createdSprint.name,
+        goal: createdSprint.goal,
+        projectId: formData.projectId,
+        startDate: createdSprint.startDate,
+        endDate: createdSprint.endDate,
+        velocity: 0,
+        committedPoints: 0,
+        completedPoints: 0,
+        userId: "",
+        status: (createdSprint.status || "planned") as "planned" | "active" | "completed",
       };
+      setBackendSprints([...backendSprints, sprint]);
       addSprint(sprint);
       toast.success("Sprint created successfully");
       
@@ -118,6 +190,7 @@ export default function Sprints() {
         goal: "",
         startDate: "",
         endDate: "",
+        projectId: currentProject?.id || "",
         velocity: 0,
         committedPoints: 0,
         completedPoints: 0,
@@ -127,6 +200,8 @@ export default function Sprints() {
       setIsCreateOpen(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to create sprint");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -176,6 +251,32 @@ export default function Sprints() {
               <DialogTitle>Create New Sprint</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label>Project *</Label>
+                <select
+                  value={formData.projectId}
+                  onChange={(e) => {
+                    setFormData({ ...formData, projectId: e.target.value });
+                    if (validationErrors.projectId) {
+                      setValidationErrors({ ...validationErrors, projectId: "" });
+                    }
+                  }}
+                  className={`w-full px-3 py-2 border rounded-md bg-background text-foreground ${
+                    validationErrors.projectId ? "border-destructive" : "border-input"
+                  }`}
+                >
+                  <option value="">Select a project</option>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+                {validationErrors.projectId && (
+                  <p className="text-sm text-destructive">{validationErrors.projectId}</p>
+                )}
+              </div>
+
               <div className="space-y-2">
                 <Label>Sprint Name *</Label>
                 <Input
@@ -272,8 +373,8 @@ export default function Sprints() {
                 )}
               </div>
 
-              <Button type="submit" className="w-full">
-                Create Sprint
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? "Creating..." : "Create Sprint"}
               </Button>
             </form>
           </DialogContent>
@@ -281,7 +382,7 @@ export default function Sprints() {
       </div>
 
       {/* Active Sprint Burndown */}
-      {sprints.filter(s => !currentProject || s.projectId === currentProject.id).some((s) => s.status === "active") && (
+      {backendSprints.filter(s => !currentProject || s.projectId === currentProject.id).some((s) => s.status === "active") && (
         <Card className="glass">
           <CardHeader>
             <CardTitle>Active Sprint Burndown Chart</CardTitle>
@@ -320,15 +421,13 @@ export default function Sprints() {
 
       {/* Sprints List */}
       <div className="grid gap-4">
-        {sprints
+        {backendSprints
           .filter(sprint => !currentProject || sprint.projectId === currentProject.id)
           .map((sprint) => {
           const sprintTasks = tasks.filter((t) => t.sprintId === sprint.id);
           const sprintStories = userStories.filter((s) => s.sprintId === sprint.id);
-          const completionRate =
-            sprint.committedPoints > 0
-              ? (sprint.completedPoints / sprint.committedPoints) * 100
-              : 0;
+          const metrics = sprintMetrics[sprint.id];
+          const completionRate = metrics?.completionRate || 0;
 
           return (
             <Card key={sprint.id} className="glass glass-hover">
@@ -364,7 +463,7 @@ export default function Sprints() {
                       <span>Progress</span>
                     </div>
                     <p className="font-medium">
-                      {sprint.completedPoints} / {sprint.committedPoints} pts
+                      {metrics?.storyPointsCompleted || 0} / {metrics?.storyPointsCommitted || 0} pts
                     </p>
                   </div>
 
@@ -373,7 +472,7 @@ export default function Sprints() {
                       <TrendingUp className="h-4 w-4" />
                       <span>Velocity</span>
                     </div>
-                    <p className="font-medium">{sprint.velocity} pts</p>
+                    <p className="font-medium">{metrics?.velocity || 0} pts</p>
                   </div>
 
                   <div className="space-y-1">
@@ -396,7 +495,7 @@ export default function Sprints() {
           );
         })}
 
-        {sprints.filter(sprint => !currentProject || sprint.projectId === currentProject.id).length === 0 && (
+        {backendSprints.filter(sprint => !currentProject || sprint.projectId === currentProject.id).length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
             No sprints created yet. Create your first sprint to get started!
           </div>

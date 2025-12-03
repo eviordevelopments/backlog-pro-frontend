@@ -187,3 +187,67 @@ export interface VideoCallSession {
   projectId?: string;
   createdAt: string;
 }
+
+export interface FinancialRecord {
+  id: string;
+  date: string;
+  type: "income" | "expense";
+  category: string;
+  amount: number;
+  projectId: string;
+  costType?: "fixed" | "variable";
+  description: string;
+  userId: string;
+}
+
+export interface FundAccount {
+  id: string;
+  name: "Technology" | "Growth" | "Team" | "Marketing" | "Emergency" | "Investments";
+  balance: number;
+  allocated: number;
+  percentage: number;
+  purpose: string;
+}
+
+export interface BudgetAllocation {
+  id: string;
+  totalBudget: number;
+  allocations: {
+    technology: number;
+    growth: number;
+    team: number;
+    marketing: number;
+    emergency: number;
+    investments: number;
+  };
+  createdAt: string;
+  status: "pending" | "approved" | "distributed";
+  userId: string;
+}
+
+export interface FinancialMetrics {
+  cac: number;
+  ltv: number;
+  cashRunway: number;
+  burnRate: number;
+  churnRate: number;
+}
+
+export interface FinancialPeriod {
+  type: "monthly" | "quarterly" | "annual";
+  startDate: string;
+  endDate: string;
+  income: number;
+  expense: number;
+  profit: number;
+}
+
+export interface ProjectFinancial {
+  projectId: string;
+  projectName: string;
+  income: number;
+  fixedCosts: number;
+  variableCosts: number;
+  profit: number;
+  margin: number;
+}

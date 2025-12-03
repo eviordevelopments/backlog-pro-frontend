@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useApp } from '@/context/AppContext';
+import { useProjectContext } from '@/context/ProjectContext';
+import { useFinances } from '@/hooks/use-finances';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,30 +10,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Plus, TrendingUp, TrendingDown, Calendar, DollarSign, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-
-interface Transaction {
-  id: string;
-  projectId: string;
-  type: 'income' | 'expense' | 'investment';
-  category: string;
-  amount: number;
-  date: string;
-  description: string;
-  is_recurring: boolean;
-}
+import { Transaction } from '@/api/finances/finances';
 
 export default function TransactionManager() {
-  const { currentProject } = useApp();
+  const { selectedProject: currentProject } = useProjectContext();
+  const { createTransaction: createTransactionAPI } = useFinances();
   const [open, setOpen] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   
   const [formData, setFormData] = useState({
-    type: 'income' as 'income' | 'expense' | 'investment',
-    category: 'revenue',
+    type: 'expense' as 'income' | 'expense',
+    category: 'salaries',
     amount: '',
     date: format(new Date(), 'yyyy-MM-dd'),
     description: '',
-    is_recurring: false
+    isRecurring: false,
+    currency: 'USD'
   });
 
   // Load transactions from localStorage
@@ -46,7 +40,6 @@ export default function TransactionManager() {
   useEffect(() => {
     loadTransactions();
     
-    // Listen for transaction updates from other components
     const handleTransactionsUpdate = () => {
       loadTransactions();
     };
@@ -58,50 +51,60 @@ export default function TransactionManager() {
     };
   }, []);
 
-  // Save transactions to localStorage and notify other components
-  const saveTransactions = (newTransactions: Transaction[]) => {
-    setTransactions(newTransactions);
-    localStorage.setItem('transactions', JSON.stringify(newTransactions));
-    // Dispatch custom event to notify other components
-    window.dispatchEvent(new Event('transactionsUpdated'));
-  };
-
   // Filter transactions by project
   const projectTransactions = currentProject
     ? transactions.filter(t => t.projectId === currentProject.id)
     : transactions;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const newTransaction: Transaction = {
-      id: Date.now().toString(),
-      projectId: currentProject?.id || 'default-project',
-      type: formData.type,
-      category: formData.category,
-      amount: parseFloat(formData.amount),
-      date: formData.date,
-      description: formData.description,
-      is_recurring: formData.is_recurring
-    };
+    if (!currentProject) {
+      toast.error('Please select a project first');
+      return;
+    }
 
-    saveTransactions([...transactions, newTransaction]);
-    
-    setOpen(false);
-    setFormData({
-      type: 'income',
-      category: 'revenue',
-      amount: '',
-      date: format(new Date(), 'yyyy-MM-dd'),
-      description: '',
-      is_recurring: false
-    });
-    
-    toast.success('Transaction added successfully');
+    setIsLoading(true);
+    try {
+      const newTransaction = await createTransactionAPI({
+        type: formData.type,
+        category: formData.category,
+        amount: parseFloat(formData.amount),
+        date: new Date(formData.date).toISOString(),
+        description: formData.description,
+        projectId: currentProject.id,
+        isRecurring: formData.isRecurring,
+        currency: formData.currency
+      });
+
+      setTransactions([...transactions, newTransaction]);
+      localStorage.setItem('transactions', JSON.stringify([...transactions, newTransaction]));
+      window.dispatchEvent(new Event('transactionsUpdated'));
+      
+      setOpen(false);
+      setFormData({
+        type: 'expense',
+        category: 'salaries',
+        amount: '',
+        date: format(new Date(), 'yyyy-MM-dd'),
+        description: '',
+        isRecurring: false,
+        currency: 'USD'
+      });
+      
+      toast.success('Transaction created successfully');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to create transaction');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleDelete = (id: string) => {
-    saveTransactions(transactions.filter(t => t.id !== id));
+    const updated = transactions.filter(t => t.id !== id);
+    setTransactions(updated);
+    localStorage.setItem('transactions', JSON.stringify(updated));
+    window.dispatchEvent(new Event('transactionsUpdated'));
     toast.success('Transaction deleted');
   };
 
@@ -135,7 +138,6 @@ export default function TransactionManager() {
                       <SelectContent>
                         <SelectItem value="income">Income</SelectItem>
                         <SelectItem value="expense">Expense</SelectItem>
-                        <SelectItem value="investment">Investment</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -149,14 +151,14 @@ export default function TransactionManager() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="revenue">Revenue</SelectItem>
-                        <SelectItem value="salary">Salary</SelectItem>
+                        <SelectItem value="salaries">Salaries</SelectItem>
                         <SelectItem value="infrastructure">Infrastructure</SelectItem>
                         <SelectItem value="marketing">Marketing</SelectItem>
                         <SelectItem value="software">Software</SelectItem>
                         <SelectItem value="hardware">Hardware</SelectItem>
                         <SelectItem value="consulting">Consulting</SelectItem>
                         <SelectItem value="training">Training</SelectItem>
+                        <SelectItem value="revenue">Revenue</SelectItem>
                         <SelectItem value="other">Other</SelectItem>
                       </SelectContent>
                     </Select>
@@ -200,8 +202,8 @@ export default function TransactionManager() {
                   <input
                     type="checkbox"
                     id="recurring"
-                    checked={formData.is_recurring}
-                    onChange={(e) => setFormData({ ...formData, is_recurring: e.target.checked })}
+                    checked={formData.isRecurring}
+                    onChange={(e) => setFormData({ ...formData, isRecurring: e.target.checked })}
                     className="rounded"
                   />
                   <Label htmlFor="recurring" className="cursor-pointer">
@@ -209,8 +211,8 @@ export default function TransactionManager() {
                   </Label>
                 </div>
 
-                <Button type="submit" className="w-full">
-                  Create Transaction
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? 'Creating...' : 'Create Transaction'}
                 </Button>
               </form>
             </DialogContent>
@@ -245,7 +247,7 @@ export default function TransactionManager() {
                   <p className="text-sm text-muted-foreground flex items-center gap-2">
                     <Calendar className="w-3 h-3" />
                     {format(new Date(transaction.date), 'MMM d, yyyy')}
-                    {transaction.is_recurring && (
+                    {transaction.isRecurring && (
                       <span className="px-2 py-0.5 rounded-full bg-accent text-accent-foreground text-xs">
                         Recurring
                       </span>

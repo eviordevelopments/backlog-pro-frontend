@@ -1,4 +1,5 @@
 import { useApp } from "@/context/AppContext";
+import { useProjectContext } from "@/context/ProjectContext";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { Task, TaskStatus } from "@/types";
 import { Badge } from "@/components/ui/badge";
@@ -103,7 +104,8 @@ function Column({
 }
 
 export default function Kanban() {
-  const { tasks, updateTask, currentProject } = useApp();
+  const { tasks, updateTask } = useApp();
+  const { selectedProject: currentProject } = useProjectContext();
   
   const filteredTasks = tasks.filter(task => !currentProject || task.projectId === currentProject.id);
 

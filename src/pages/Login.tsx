@@ -82,9 +82,7 @@ export default function Login() {
       <Card className="w-full max-w-md glass">
         <CardHeader className="space-y-1">
           <div className="flex items-center justify-center mb-4">
-            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-              <LogIn className="h-6 w-6 text-primary" />
-            </div>
+            <img src="/evior-logo.png" alt="E-vior" className="h-12 w-auto" />
           </div>
           <CardTitle className="text-2xl text-center">Welcome back</CardTitle>
           <CardDescription className="text-center">

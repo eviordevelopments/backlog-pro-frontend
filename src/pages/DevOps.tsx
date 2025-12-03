@@ -1,4 +1,5 @@
 import { useApp } from "@/context/AppContext";
+import { useProjectContext } from "@/context/ProjectContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
@@ -17,7 +18,8 @@ import { Activity, Zap, Clock, AlertCircle, TrendingUp } from "lucide-react";
 import DevOpsLifecycle from "@/components/DevOpsLifecycle";
 
 export default function DevOps() {
-  const { kpiMetrics, updateKPIMetrics, currentProject } = useApp();
+  const { kpiMetrics, updateKPIMetrics } = useApp();
+  const { selectedProject: currentProject } = useProjectContext();
 
   const deploymentData = [
     { week: "W1", deployments: 8 },

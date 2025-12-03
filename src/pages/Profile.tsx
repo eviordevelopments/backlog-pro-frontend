@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { useAuth } from "@/context/AuthContext";
+import { useProjectContext } from "@/context/ProjectContext";
 import { useProfile } from "@/hooks/use-profile";
 import { UserProfile, UpdateProfileInput } from "@/api/user/profile";
 import { Button } from "@/components/ui/button";
@@ -17,6 +19,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/hooks/use-toast";
+import { getWorkedHours, WorkedHoursResponseDto } from "@/api/worked-hours/worked-hours";
+import { Clock } from "lucide-react";
 
 const profileSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -27,12 +31,27 @@ const profileSchema = z.object({
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
 export default function Profile() {
+  const { user } = useAuth();
+  const { selectedProject: currentProject } = useProjectContext();
   const { getProfile, updateProfile, updateAvatar } = useProfile();
   const { toast } = useToast();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState("");
+  const [workedHours, setWorkedHours] = useState<WorkedHoursResponseDto | null>(null);
+  const [loadingHours, setLoadingHours] = useState(false);
+
+  const getToken = (): string | null => {
+    const sessionData = localStorage.getItem('auth_session');
+    if (!sessionData) return null;
+    try {
+      const session = JSON.parse(sessionData);
+      return session.accessToken;
+    } catch {
+      return null;
+    }
+  };
 
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
@@ -69,6 +88,26 @@ export default function Profile() {
 
     loadProfile();
   }, [getProfile, form, toast]);
+
+  // Load worked hours
+  useEffect(() => {
+    const loadWorkedHours = async () => {
+      const token = getToken();
+      if (!token) return;
+
+      try {
+        setLoadingHours(true);
+        const data = await getWorkedHours(token, currentProject?.id);
+        setWorkedHours(data);
+      } catch (error) {
+        console.error('Failed to load worked hours:', error);
+      } finally {
+        setLoadingHours(false);
+      }
+    };
+
+    loadWorkedHours();
+  }, [currentProject]);
 
   const onSubmit = async (data: ProfileFormValues) => {
     try {
@@ -209,6 +248,54 @@ export default function Profile() {
                 {profile?.createdAt && new Date(profile.createdAt).toLocaleDateString()}
               </p>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Worked Hours Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              Worked Hours
+            </CardTitle>
+            <CardDescription>Your time tracking information</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {loadingHours ? (
+              <div className="flex items-center justify-center py-4">
+                <Spinner size="sm" />
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="text-sm font-medium">Total Hours</label>
+                  <p className="text-2xl font-bold text-primary">
+                    {workedHours?.totalHours.toFixed(1) || '0'}h
+                  </p>
+                </div>
+                {currentProject && (
+                  <div>
+                    <label className="text-sm font-medium">Project</label>
+                    <p className="text-sm text-muted-foreground">{currentProject.name}</p>
+                  </div>
+                )}
+                {workedHours?.breakdown && workedHours.breakdown.length > 0 && (
+                  <div>
+                    <label className="text-sm font-medium">Recent Activity</label>
+                    <div className="space-y-2 mt-2">
+                      {workedHours.breakdown.slice(0, 5).map((entry, idx) => (
+                        <div key={idx} className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">
+                            {new Date(entry.date).toLocaleDateString()}
+                          </span>
+                          <span className="font-medium">{entry.hours}h</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </CardContent>
         </Card>
       </div>

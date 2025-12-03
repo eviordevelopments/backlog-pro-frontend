@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
+import { useProjectContext } from "@/context/ProjectContext";
+import { useUserStories } from "@/hooks/use-user-stories";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -11,48 +13,67 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Plus, CheckCircle2, Circle, Trash2 } from "lucide-react";
-import { UserStory, AcceptanceCriteria } from "@/types";
+import { Plus, Circle, Trash2 } from "lucide-react";
+import { UserStory } from "@/api/user-stories/user-stories";
 import { toast } from "sonner";
 
 export default function UserStories() {
-  const { userStories, addUserStory, updateUserStory, deleteUserStory, sprints, currentProject, projects } =
-    useApp();
+  const { sprints } = useApp();
+  const { projects, selectedProject: currentProject } = useProjectContext();
+  const { createUserStory: createUserStoryAPI, getProjectBacklog: getProjectBacklogAPI } = useUserStories();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [selectedStory, setSelectedStory] = useState<UserStory | null>(null);
+  const [backendUserStories, setBackendUserStories] = useState<UserStory[]>([]);
 
   const [formData, setFormData] = useState({
     title: "",
-    role: "",
+    userType: "",
     action: "",
     benefit: "",
-    description: "",
+    priority: "medium",
     storyPoints: 0,
-    businessValue: 0,
     sprintId: "",
     projectId: currentProject?.id || "",
+    description: "",
+    businessValue: 0,
+    role: "",
   });
 
   const [newCriteria, setNewCriteria] = useState("");
-  const [acceptanceCriteria, setAcceptanceCriteria] = useState<
-    AcceptanceCriteria[]
-  >([]);
+  const [acceptanceCriteria, setAcceptanceCriteria] = useState<string[]>([]);
   
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  // Load user stories from backend when component mounts or project changes
+  useEffect(() => {
+    const loadUserStories = async () => {
+      try {
+        const data = await getProjectBacklogAPI(currentProject?.id || "");
+        // Add projectId to each story since backend doesn't return it
+        const storiesWithProjectId = data.map((story: any) => ({
+          ...story,
+          projectId: currentProject?.id || "",
+        }));
+        setBackendUserStories(storiesWithProjectId);
+      } catch (error) {
+        console.error("Failed to load user stories:", error);
+      }
+    };
+
+    if (currentProject?.id) {
+      loadUserStories();
+    }
+  }, [currentProject?.id, getProjectBacklogAPI]);
 
   const validateForm = () => {
     const errors: Record<string, string> = {};
 
-    // Required field validation
     if (!formData.title.trim()) {
       errors.title = "Title is required";
     }
 
-    if (!formData.role.trim()) {
-      errors.role = "Role is required";
+    if (!formData.userType.trim()) {
+      errors.userType = "Role is required";
     }
 
     if (!formData.action.trim()) {
@@ -63,28 +84,15 @@ export default function UserStories() {
       errors.benefit = "Benefit is required";
     }
 
-    // Numeric validation
-    if (formData.storyPoints < 0) {
-      errors.storyPoints = "Story points must be non-negative";
-    }
-
-    if (isNaN(formData.storyPoints)) {
-      errors.storyPoints = "Story points must be a valid number";
-    }
-
-    if (formData.businessValue < 0 || formData.businessValue > 100) {
-      errors.businessValue = "Business value must be between 0 and 100";
-    }
-
-    if (isNaN(formData.businessValue)) {
-      errors.businessValue = "Business value must be a valid number";
+    if (formData.storyPoints < 0 || isNaN(formData.storyPoints)) {
+      errors.storyPoints = "Story points must be a valid non-negative number";
     }
 
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Validate form
@@ -94,14 +102,26 @@ export default function UserStories() {
     }
 
     try {
-      const story: UserStory = {
-        ...formData,
-        projectId: currentProject?.id || "default-project",
-        id: Date.now().toString(),
+      // Create in backend
+      const createdStory = await createUserStoryAPI({
+        title: formData.title,
+        userType: formData.userType,
+        action: formData.action,
+        benefit: formData.benefit,
+        priority: formData.priority,
+        storyPoints: formData.storyPoints,
+        projectId: formData.projectId,
+        sprintId: formData.sprintId || undefined,
         acceptanceCriteria,
-        createdAt: new Date().toISOString(),
+      });
+
+      // Add to backend stories list with projectId
+      const storyWithProjectId = {
+        ...createdStory,
+        projectId: formData.projectId,
+        acceptanceCriteria,
       };
-      addUserStory(story);
+      setBackendUserStories([...backendUserStories, storyWithProjectId]);
       toast.success("User Story created successfully");
       resetForm();
       setIsCreateOpen(false);
@@ -113,14 +133,16 @@ export default function UserStories() {
   const resetForm = () => {
     setFormData({
       title: "",
-      role: "",
+      userType: "",
       action: "",
       benefit: "",
-      description: "",
+      priority: "medium",
       storyPoints: 0,
-      businessValue: 0,
       sprintId: "",
       projectId: currentProject?.id || "",
+      description: "",
+      businessValue: 0,
+      role: "",
     });
     setAcceptanceCriteria([]);
     setNewCriteria("");
@@ -129,48 +151,16 @@ export default function UserStories() {
 
   const addCriteria = () => {
     if (newCriteria.trim()) {
-      setAcceptanceCriteria([
-        ...acceptanceCriteria,
-        {
-          id: Date.now().toString(),
-          description: newCriteria,
-          completed: false,
-        },
-      ]);
+      setAcceptanceCriteria([...acceptanceCriteria, newCriteria]);
       setNewCriteria("");
     }
   };
 
-  const removeCriteria = (id: string) => {
-    setAcceptanceCriteria(acceptanceCriteria.filter((c) => c.id !== id));
+  const removeCriteria = (index: number) => {
+    setAcceptanceCriteria(acceptanceCriteria.filter((_, i) => i !== index));
   };
 
-  const toggleCriteria = (story: UserStory, criteriaId: string) => {
-    try {
-      const updatedCriteria = story.acceptanceCriteria.map((c) =>
-        c.id === criteriaId ? { ...c, completed: !c.completed } : c
-      );
-      updateUserStory(story.id, { acceptanceCriteria: updatedCriteria });
-      toast.success("User Story updated successfully");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update user story");
-    }
-  };
 
-  const handleDelete = (id: string) => {
-    try {
-      deleteUserStory(id);
-      toast.success("User Story deleted successfully");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to delete user story");
-    }
-  };
-
-  const getCompletionPercentage = (criteria: AcceptanceCriteria[]) => {
-    if (criteria.length === 0) return 0;
-    const completed = criteria.filter((c) => c.completed).length;
-    return (completed / criteria.length) * 100;
-  };
 
   return (
     <div className="space-y-6">
@@ -216,18 +206,18 @@ export default function UserStories() {
                 <div className="space-y-2">
                   <Label>As a (Role) *</Label>
                   <Input
-                    value={formData.role}
+                    value={formData.userType}
                     onChange={(e) => {
-                      setFormData({ ...formData, role: e.target.value });
-                      if (validationErrors.role) {
-                        setValidationErrors({ ...validationErrors, role: "" });
+                      setFormData({ ...formData, userType: e.target.value });
+                      if (validationErrors.userType) {
+                        setValidationErrors({ ...validationErrors, userType: "" });
                       }
                     }}
                     placeholder="Product Owner, Developer, User..."
-                    className={validationErrors.role ? "border-destructive" : ""}
+                    className={validationErrors.userType ? "border-destructive" : ""}
                   />
-                  {validationErrors.role && (
-                    <p className="text-sm text-destructive">{validationErrors.role}</p>
+                  {validationErrors.userType && (
+                    <p className="text-sm text-destructive">{validationErrors.userType}</p>
                   )}
                 </div>
 
@@ -269,17 +259,6 @@ export default function UserStories() {
               </div>
 
               <div className="space-y-2">
-                <Label>Description</Label>
-                <Textarea
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
-                  rows={3}
-                />
-              </div>
-
-              <div className="space-y-2">
                 <Label>Project *</Label>
                 <select
                   className="w-full h-10 px-3 rounded-md border border-input bg-background"
@@ -296,7 +275,7 @@ export default function UserStories() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Story Points</Label>
                   <Input
@@ -320,45 +299,37 @@ export default function UserStories() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Business Value (0-100)</Label>
-                  <Input
-                    type="number"
-                    value={formData.businessValue}
-                    onChange={(e) => {
-                      setFormData({
-                        ...formData,
-                        businessValue: parseInt(e.target.value) || 0,
-                      });
-                      if (validationErrors.businessValue) {
-                        setValidationErrors({ ...validationErrors, businessValue: "" });
-                      }
-                    }}
-                    min={0}
-                    max={100}
-                    className={validationErrors.businessValue ? "border-destructive" : ""}
-                  />
-                  {validationErrors.businessValue && (
-                    <p className="text-sm text-destructive">{validationErrors.businessValue}</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Sprint (Optional)</Label>
+                  <Label>Priority</Label>
                   <select
                     className="w-full h-10 px-3 rounded-md border border-input bg-background"
-                    value={formData.sprintId}
+                    value={formData.priority}
                     onChange={(e) =>
-                      setFormData({ ...formData, sprintId: e.target.value })
+                      setFormData({ ...formData, priority: e.target.value })
                     }
                   >
-                    <option value="">No Sprint</option>
-                    {sprints.map((sprint) => (
-                      <option key={sprint.id} value={sprint.id}>
-                        {sprint.name}
-                      </option>
-                    ))}
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Sprint (Optional)</Label>
+                <select
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                  value={formData.sprintId}
+                  onChange={(e) =>
+                    setFormData({ ...formData, sprintId: e.target.value })
+                  }
+                >
+                  <option value="">No Sprint</option>
+                  {sprints.map((sprint) => (
+                    <option key={sprint.id} value={sprint.id}>
+                      {sprint.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="space-y-3">
@@ -368,7 +339,7 @@ export default function UserStories() {
                     value={newCriteria}
                     onChange={(e) => setNewCriteria(e.target.value)}
                     placeholder="Add acceptance criteria..."
-                    onKeyPress={(e) => {
+                    onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
                         addCriteria();
@@ -381,18 +352,18 @@ export default function UserStories() {
                 </div>
 
                 <div className="space-y-2">
-                  {acceptanceCriteria.map((criteria) => (
+                  {acceptanceCriteria.map((criteria, index) => (
                     <div
-                      key={criteria.id}
+                      key={index}
                       className="flex items-center gap-2 p-2 glass rounded"
                     >
-                      <CheckCircle2 className="h-4 w-4 text-success" />
-                      <span className="flex-1">{criteria.description}</span>
+                      <Circle className="h-4 w-4 text-success" />
+                      <span className="flex-1">{criteria}</span>
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => removeCriteria(criteria.id)}
+                        onClick={() => removeCriteria(index)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -411,22 +382,20 @@ export default function UserStories() {
 
       {/* User Stories List */}
       <div className="grid gap-4">
-        {userStories
+        {backendUserStories
           .filter(story => !currentProject || story.projectId === currentProject.id)
           .map((story) => {
-          const completion = getCompletionPercentage(story.acceptanceCriteria);
           return (
             <Card
               key={story.id}
-              className="glass glass-hover cursor-pointer"
-              onClick={() => setSelectedStory(story)}
+              className="glass glass-hover"
             >
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <CardTitle className="text-xl">{story.title}</CardTitle>
                     <p className="text-sm text-muted-foreground mt-2">
-                      As a <strong>{story.role}</strong>, I want to{" "}
+                      As a <strong>{story.userType}</strong>, I want to{" "}
                       <strong>{story.action}</strong>, so that{" "}
                       <strong>{story.benefit}</strong>
                     </p>
@@ -434,51 +403,34 @@ export default function UserStories() {
                   <div className="flex gap-2">
                     <Badge variant="secondary">{story.storyPoints} pts</Badge>
                     <Badge className="bg-accent text-accent-foreground">
-                      Value: {story.businessValue}
+                      {story.priority}
                     </Badge>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {story.description && (
-                  <p className="text-sm">{story.description}</p>
-                )}
-
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium">Acceptance Criteria</span>
                     <span className="text-muted-foreground">
-                      {story.acceptanceCriteria.filter((c) => c.completed).length} /{" "}
-                      {story.acceptanceCriteria.length} completed (
-                      {completion.toFixed(0)}%)
+                      {story.acceptanceCriteria?.length || 0} criteria
                     </span>
                   </div>
 
                   <div className="space-y-2">
-                    {story.acceptanceCriteria.map((criteria) => (
-                      <div
-                        key={criteria.id}
-                        className="flex items-start gap-2 text-sm"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Checkbox
-                          checked={criteria.completed}
-                          onCheckedChange={() =>
-                            toggleCriteria(story, criteria.id)
-                          }
-                          className="mt-0.5"
-                        />
-                        <span
-                          className={
-                            criteria.completed
-                              ? "line-through text-muted-foreground"
-                              : ""
-                          }
+                    {story.acceptanceCriteria && story.acceptanceCriteria.length > 0 ? (
+                      story.acceptanceCriteria.map((criteria, index) => (
+                        <div
+                          key={index}
+                          className="flex items-start gap-2 text-sm"
                         >
-                          {criteria.description}
-                        </span>
-                      </div>
-                    ))}
+                          <Circle className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                          <span>{criteria}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No acceptance criteria</p>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -486,7 +438,7 @@ export default function UserStories() {
           );
         })}
 
-        {userStories.filter(story => !currentProject || story.projectId === currentProject.id).length === 0 && (
+        {backendUserStories.filter(story => !currentProject || story.projectId === currentProject.id).length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
             No user stories yet. Create your first story to get started!
           </div>

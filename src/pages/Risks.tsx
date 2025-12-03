@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { useApp } from "@/context/AppContext";
+import { useState, useEffect } from "react";
+import { useAuth } from "@/context/AuthContext";
+import { useProjectContext } from "@/context/ProjectContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -14,103 +15,150 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Plus, AlertTriangle } from "lucide-react";
-import { Risk } from "@/types";
 import { toast } from "sonner";
+import { createRisk, getProjectRisks, Risk, CreateRiskDto } from "@/api/risks/risks";
 
 export default function Risks() {
-  const { risks, addRisk, updateRisk, teamMembers, currentProject } = useApp();
+  const { user } = useAuth();
+  const { selectedProject: currentProject } = useProjectContext();
+  const [risks, setRisks] = useState<Risk[]>([]);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    probability: 3,
-    impact: 3,
-    mitigation: "",
-    owner: "",
-    status: "open" as Risk["status"],
+    probability: "medium" as const,
+    impact: "medium" as const,
+    mitigationStrategy: "",
+    category: "technical",
   });
 
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
+  const getToken = (): string | null => {
+    const sessionData = localStorage.getItem('auth_session');
+    if (!sessionData) return null;
+    try {
+      const session = JSON.parse(sessionData);
+      return session.accessToken;
+    } catch {
+      return null;
+    }
+  };
+
+  const loadRisks = async () => {
+    const token = getToken();
+    if (!token || !currentProject) return;
+
+    try {
+      setLoading(true);
+      const data = await getProjectRisks(token, currentProject.id);
+      setRisks(data);
+      localStorage.setItem('projectRisks', JSON.stringify(data));
+    } catch (error) {
+      console.error('Failed to load risks:', error);
+      // Fallback to localStorage
+      try {
+        const saved = localStorage.getItem('projectRisks');
+        if (saved) {
+          setRisks(JSON.parse(saved));
+        }
+      } catch (e) {
+        console.error('Failed to load from localStorage:', e);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentProject) {
+      loadRisks();
+    }
+  }, [currentProject]);
+
   const validateForm = () => {
     const errors: Record<string, string> = {};
 
-    // Required field validation
     if (!formData.title.trim()) {
       errors.title = "Title is required";
-    }
-
-    // Numeric validation
-    if (formData.probability < 1 || formData.probability > 5) {
-      errors.probability = "Probability must be between 1 and 5";
-    }
-
-    if (isNaN(formData.probability) || !Number.isInteger(formData.probability)) {
-      errors.probability = "Probability must be a valid integer";
-    }
-
-    if (formData.impact < 1 || formData.impact > 5) {
-      errors.impact = "Impact must be between 1 and 5";
-    }
-
-    if (isNaN(formData.impact) || !Number.isInteger(formData.impact)) {
-      errors.impact = "Impact must be a valid integer";
     }
 
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate form
     if (!validateForm()) {
       toast.error("Please fix validation errors before submitting");
       return;
     }
 
+    const token = getToken();
+    if (!token || !user || !currentProject) {
+      toast.error('Not authenticated or no project selected');
+      return;
+    }
+
     try {
-      const risk: Risk = {
-        ...formData,
-        projectId: currentProject?.id || "default-project",
-        id: Date.now().toString(),
-        score: formData.probability * formData.impact,
+      setLoading(true);
+
+      const input: CreateRiskDto = {
+        title: formData.title,
+        description: formData.description,
+        category: formData.category,
+        probability: formData.probability,
+        impact: formData.impact,
+        projectId: currentProject.id,
+        responsibleId: user.id,
+        mitigationStrategy: formData.mitigationStrategy,
       };
-      addRisk(risk);
-      toast.success("Risk added successfully");
-      
-      // Clear form and errors
+
+      const newRisk = await createRisk(token, input);
+      toast.success("Risk created successfully");
+
+      // Add to local state
+      setRisks([...risks, newRisk]);
+      localStorage.setItem('projectRisks', JSON.stringify([...risks, newRisk]));
+
+      // Clear form
       setFormData({
         title: "",
         description: "",
-        probability: 3,
-        impact: 3,
-        mitigation: "",
-        owner: "",
-        status: "open",
+        probability: "medium",
+        impact: "medium",
+        mitigationStrategy: "",
+        category: "technical",
       });
       setValidationErrors({});
       setIsCreateOpen(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to add risk");
+      console.error('Failed to create risk:', error);
+      toast.error(error instanceof Error ? error.message : "Failed to create risk");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getRiskColor = (score: number) => {
-    if (score <= 4) return "bg-success text-success-foreground";
-    if (score <= 12) return "bg-warning text-warning-foreground";
+  const probabilityMap = { low: 1, medium: 2, high: 3, critical: 4 };
+  const impactMap = { low: 1, medium: 2, high: 3, critical: 4 };
+
+  const getRiskColor = (severity: number) => {
+    if (severity <= 4) return "bg-success text-success-foreground";
+    if (severity <= 8) return "bg-warning text-warning-foreground";
     return "bg-destructive text-destructive-foreground";
   };
 
-  const getRiskLevel = (score: number) => {
-    if (score <= 4) return "Low";
-    if (score <= 12) return "Medium";
+  const getRiskLevel = (severity: number) => {
+    if (severity <= 4) return "Low";
+    if (severity <= 8) return "Medium";
     return "High";
   };
 
-  // Create 5x5 matrix
-  const matrix = Array.from({ length: 5 }, (_, i) => 5 - i);
+  // Create 4x4 matrix
+  const matrix = Array.from({ length: 4 }, (_, i) => 4 - i);
 
   return (
     <div className="space-y-6">
@@ -161,85 +209,77 @@ export default function Risks() {
                 />
               </div>
 
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <select
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                  value={formData.category}
+                  onChange={(e) =>
+                    setFormData({ ...formData, category: e.target.value })
+                  }
+                >
+                  <option value="technical">Technical</option>
+                  <option value="resource">Resource</option>
+                  <option value="schedule">Schedule</option>
+                  <option value="external">External</option>
+                  <option value="organizational">Organizational</option>
+                </select>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Probability (1-5) *</Label>
-                  <Input
-                    type="number"
+                  <Label>Probability *</Label>
+                  <select
+                    className="w-full h-10 px-3 rounded-md border border-input bg-background"
                     value={formData.probability}
                     onChange={(e) => {
                       setFormData({
                         ...formData,
-                        probability: parseInt(e.target.value) || 1,
+                        probability: e.target.value as 'low' | 'medium' | 'high' | 'critical',
                       });
-                      if (validationErrors.probability) {
-                        setValidationErrors({ ...validationErrors, probability: "" });
-                      }
                     }}
-                    min={1}
-                    max={5}
-                    className={validationErrors.probability ? "border-destructive" : ""}
-                  />
-                  {validationErrors.probability && (
-                    <p className="text-sm text-destructive">{validationErrors.probability}</p>
-                  )}
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Impact (1-5) *</Label>
-                  <Input
-                    type="number"
+                  <Label>Impact *</Label>
+                  <select
+                    className="w-full h-10 px-3 rounded-md border border-input bg-background"
                     value={formData.impact}
                     onChange={(e) => {
                       setFormData({
                         ...formData,
-                        impact: parseInt(e.target.value) || 1,
+                        impact: e.target.value as 'low' | 'medium' | 'high' | 'critical',
                       });
-                      if (validationErrors.impact) {
-                        setValidationErrors({ ...validationErrors, impact: "" });
-                      }
                     }}
-                    min={1}
-                    max={5}
-                    className={validationErrors.impact ? "border-destructive" : ""}
-                  />
-                  {validationErrors.impact && (
-                    <p className="text-sm text-destructive">{validationErrors.impact}</p>
-                  )}
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </select>
                 </div>
               </div>
 
               <div className="space-y-2">
                 <Label>Mitigation Strategy</Label>
                 <Textarea
-                  value={formData.mitigation}
+                  value={formData.mitigationStrategy}
                   onChange={(e) =>
-                    setFormData({ ...formData, mitigation: e.target.value })
+                    setFormData({ ...formData, mitigationStrategy: e.target.value })
                   }
                   rows={3}
+                  disabled={loading}
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label>Owner</Label>
-                <select
-                  className="w-full h-10 px-3 rounded-md border border-input bg-background"
-                  value={formData.owner}
-                  onChange={(e) =>
-                    setFormData({ ...formData, owner: e.target.value })
-                  }
-                >
-                  <option value="">Select owner</option>
-                  {teamMembers.map((member) => (
-                    <option key={member.id} value={member.name}>
-                      {member.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <Button type="submit" className="w-full">
-                Add Risk
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? 'Creating...' : 'Add Risk'}
               </Button>
             </form>
           </DialogContent>
@@ -257,7 +297,7 @@ export default function Risks() {
               <thead>
                 <tr>
                   <th className="p-2 text-sm text-muted-foreground">Impact →</th>
-                  {[1, 2, 3, 4, 5].map((i) => (
+                  {['Low', 'Medium', 'High', 'Critical'].map((i) => (
                     <th key={i} className="p-2 text-sm font-medium">
                       {i}
                     </th>
@@ -268,12 +308,14 @@ export default function Risks() {
                 {matrix.map((probability) => (
                   <tr key={probability}>
                     <td className="p-2 text-sm font-medium">
-                      {probability === 5 ? "↑ Probability" : probability}
+                      {probability === 4 ? "↑ Probability" : ['Low', 'Medium', 'High', 'Critical'][probability - 1]}
                     </td>
-                    {[1, 2, 3, 4, 5].map((impact) => {
-                      const score = probability * impact;
+                    {['low', 'medium', 'high', 'critical'].map((impact) => {
+                      const probValue = probabilityMap[['low', 'medium', 'high', 'critical'][probability - 1] as keyof typeof probabilityMap];
+                      const impactValue = impactMap[impact as keyof typeof impactMap];
+                      const score = probValue * impactValue;
                       const cellRisks = risks.filter(
-                        (r) => (!currentProject || r.projectId === currentProject.id) && r.probability === probability && r.impact === impact
+                        (r) => r.probability === ['low', 'medium', 'high', 'critical'][probability - 1] && r.impact === impact
                       );
                       return (
                         <td
@@ -281,7 +323,7 @@ export default function Risks() {
                           className={`p-2 border ${
                             score <= 4
                               ? "bg-success/20"
-                              : score <= 12
+                              : score <= 8
                               ? "bg-warning/20"
                               : "bg-destructive/20"
                           }`}
@@ -315,55 +357,57 @@ export default function Risks() {
 
       {/* Risks List */}
       <div className="grid gap-4">
-        {risks
-          .filter(risk => !currentProject || risk.projectId === currentProject.id)
-          .map((risk) => (
-          <Card key={risk.id} className="glass glass-hover">
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <CardTitle>{risk.title}</CardTitle>
-                    <Badge className={getRiskColor(risk.score)}>
-                      {getRiskLevel(risk.score)} - Score: {risk.score}
-                    </Badge>
-                    <Badge variant="outline">{risk.status}</Badge>
+        {risks.map((risk) => {
+          const probValue = probabilityMap[risk.probability];
+          const impactValue = impactMap[risk.impact];
+          const severity = probValue * impactValue;
+
+          return (
+            <Card key={risk.id} className="glass glass-hover">
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <CardTitle>{risk.title}</CardTitle>
+                      <Badge className={getRiskColor(severity)}>
+                        {getRiskLevel(severity)} - Severity: {severity}
+                      </Badge>
+                      <Badge variant="outline">{risk.status}</Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      {risk.description}
+                    </p>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    {risk.description}
-                  </p>
                 </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Probability: </span>
-                  <strong>{risk.probability}/5</strong>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Impact: </span>
-                  <strong>{risk.impact}/5</strong>
-                </div>
-                {risk.owner && (
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <span className="text-muted-foreground">Owner: </span>
-                    <strong>{risk.owner}</strong>
+                    <span className="text-muted-foreground">Probability: </span>
+                    <strong className="capitalize">{risk.probability}</strong>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Impact: </span>
+                    <strong className="capitalize">{risk.impact}</strong>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Category: </span>
+                    <strong className="capitalize">{risk.category}</strong>
+                  </div>
+                </div>
+
+                {risk.mitigationStrategy && (
+                  <div className="pt-3 border-t">
+                    <p className="text-sm font-medium mb-1">Mitigation Strategy</p>
+                    <p className="text-sm text-muted-foreground">{risk.mitigationStrategy}</p>
                   </div>
                 )}
-              </div>
+              </CardContent>
+            </Card>
+          );
+        })}
 
-              {risk.mitigation && (
-                <div className="pt-3 border-t">
-                  <p className="text-sm font-medium mb-1">Mitigation Strategy</p>
-                  <p className="text-sm text-muted-foreground">{risk.mitigation}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-
-        {risks.filter(risk => !currentProject || risk.projectId === currentProject.id).length === 0 && (
+        {risks.length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
             No risks identified yet. Add your first risk to start tracking!
           </div>

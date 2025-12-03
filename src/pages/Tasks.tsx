@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApp } from "@/context/AppContext";
+import { useProjectContext } from "@/context/ProjectContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -24,8 +25,9 @@ import { Task, TaskPriority, TaskStatus } from "@/types";
 import { toast } from "sonner";
 
 export default function Tasks() {
-  const { tasks, addTask, updateTask, deleteTask, teamMembers, sprints, currentProject, projects } =
+  const { tasks, addTask, updateTask, deleteTask, teamMembers, sprints } =
     useApp();
+  const { projects, selectedProject: currentProject } = useProjectContext();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterPriority, setFilterPriority] = useState<string>("all");
@@ -108,7 +110,7 @@ export default function Tasks() {
     try {
       const taskData = {
         ...formData,
-        projectId: formData.projectId || currentProject?.id || "default-project",
+        projectId: formData.projectId || currentProject?.id || "",
         tags: formData.tags.split(",").map((t) => t.trim()).filter(t => t),
         id: editingTask?.id || Date.now().toString(),
         createdAt: editingTask?.createdAt || new Date().toISOString(),
@@ -258,9 +260,7 @@ export default function Tasks() {
                           {project.name}
                         </SelectItem>
                       ))
-                    ) : (
-                      <SelectItem value="default-project">Default Project</SelectItem>
-                    )}
+                    ) : null}
                   </SelectContent>
                 </Select>
               </div>

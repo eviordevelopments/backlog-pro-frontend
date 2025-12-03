@@ -1,5 +1,8 @@
 import { useApp } from "@/context/AppContext";
+import { useProjectContext } from "@/context/ProjectContext";
+import { useDashboardMetrics, useProjectMetrics } from "@/hooks/use-metrics";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { MetricsStatus } from "@/components/MetricsStatus";
 import {
   BarChart,
   Bar,
@@ -17,7 +20,10 @@ import {
 import { CheckCircle2, Clock, TrendingUp, Users } from "lucide-react";
 
 export default function Dashboard() {
-  const { tasks, sprints, kpiMetrics, teamMembers, currentProject } = useApp();
+  const { tasks, sprints, kpiMetrics, teamMembers } = useApp();
+  const { selectedProject: currentProject } = useProjectContext();
+  const dashboardMetrics = useDashboardMetrics();
+  const projectMetrics = useProjectMetrics(currentProject?.id || '');
 
   // Filter data by current project
   const projectTasks = tasks.filter(task => !currentProject || task.projectId === currentProject.id);
@@ -78,51 +84,81 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-4xl font-bold text-gradient">Dashboard</h1>
-        <p className="text-muted-foreground mt-2">
-          {currentProject 
-            ? `Overview of ${currentProject.name}` 
-            : "Overview of your agile metrics and team performance"}
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-4xl font-bold text-gradient">Dashboard</h1>
+          <p className="text-muted-foreground mt-2">
+            {currentProject 
+              ? `Overview of ${currentProject.name}` 
+              : "Overview of your agile metrics and team performance"}
+          </p>
+        </div>
+        <MetricsStatus 
+          isConnected={projectMetrics.isConnected || dashboardMetrics.isConnected}
+          error={projectMetrics.error || dashboardMetrics.error}
+        />
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="glass glass-hover">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Velocity</CardTitle>
+            <CardTitle className="text-sm font-medium">Progress</CardTitle>
             <TrendingUp className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{projectVelocity.toFixed(1)}</div>
-            <p className="text-xs text-muted-foreground">points per sprint</p>
+            <div className="text-2xl font-bold">
+              {projectMetrics.metrics?.progress !== undefined 
+                ? projectMetrics.metrics.progress.toFixed(0)
+                : dashboardMetrics.metrics?.overallProgress.toFixed(0) || '0'}%
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {projectMetrics.isConnected || dashboardMetrics.isConnected ? 'live' : 'overall'}
+            </p>
           </CardContent>
         </Card>
 
         <Card className="glass glass-hover">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Cycle Time</CardTitle>
+            <CardTitle className="text-sm font-medium">Budget Used</CardTitle>
             <Clock className="h-4 w-4 text-accent" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{projectCycleTime.toFixed(1)}d</div>
-            <p className="text-xs text-muted-foreground">average days</p>
+            <div className="text-2xl font-bold">
+              {projectMetrics.metrics?.budgetUtilization !== undefined
+                ? projectMetrics.metrics.budgetUtilization.toFixed(0)
+                : dashboardMetrics.metrics?.budgetUtilization.toFixed(0) || '0'}%
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {projectMetrics.metrics?.spent !== undefined
+                ? `$${projectMetrics.metrics.spent} / $${projectMetrics.metrics.budget}`
+                : dashboardMetrics.metrics?.totalSpent !== undefined
+                ? `$${dashboardMetrics.metrics.totalSpent} / $${dashboardMetrics.metrics.totalBudget}`
+                : 'N/A'}
+            </p>
           </CardContent>
         </Card>
 
         <Card className="glass glass-hover">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">
-              Sprint Completion
+              Tasks Completed
             </CardTitle>
             <CheckCircle2 className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {projectCompletionRate.toFixed(0)}%
+              {projectMetrics.metrics?.completedTasks !== undefined
+                ? projectMetrics.metrics.completedTasks
+                : dashboardMetrics.metrics?.completedTasks || '0'}
             </div>
-            <p className="text-xs text-muted-foreground">completion rate</p>
+            <p className="text-xs text-muted-foreground">
+              {projectMetrics.metrics?.totalTasks !== undefined
+                ? `of ${projectMetrics.metrics.totalTasks}`
+                : dashboardMetrics.metrics?.totalTasks !== undefined
+                ? `of ${dashboardMetrics.metrics.totalTasks}`
+                : 'tasks'}
+            </p>
           </CardContent>
         </Card>
 

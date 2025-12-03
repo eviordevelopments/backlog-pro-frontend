@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { useApp } from "@/context/AppContext";
+import { useAuth } from "@/context/AuthContext";
+import { useProjectContext } from "@/context/ProjectContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,25 +37,73 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { VideoCallSession } from "@/types";
-import { toast } from "@/components/ui/use-toast";
+import { toast as sonnerToast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { createMeeting, getProjectMeetings, Meeting, CreateMeetingDto } from "@/api/meetings/meetings";
 
 export default function VideoCall() {
-  const { teamMembers, currentProject } = useApp();
+  const { user } = useAuth();
+  const { selectedProject: currentProject } = useProjectContext();
   const [sessions, setSessions] = useState<VideoCallSession[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [open, setOpen] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOn, setIsVideoOn] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [loading, setLoading] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
+    type: "standup" as const,
+    duration: 1,
+    dateTime: new Date().toISOString().slice(0, 16),
     selectedParticipants: [] as string[],
   });
+
+  const getToken = (): string | null => {
+    const sessionData = localStorage.getItem('auth_session');
+    if (!sessionData) return null;
+    try {
+      const session = JSON.parse(sessionData);
+      return session.accessToken;
+    } catch {
+      return null;
+    }
+  };
+
+  const loadMeetings = async () => {
+    const token = getToken();
+    if (!token || !currentProject) return;
+
+    try {
+      setLoading(true);
+      const data = await getProjectMeetings(token, currentProject.id);
+      setMeetings(data);
+      localStorage.setItem('projectMeetings', JSON.stringify(data));
+    } catch (error) {
+      console.error('Failed to load meetings:', error);
+      try {
+        const saved = localStorage.getItem('projectMeetings');
+        if (saved) {
+          setMeetings(JSON.parse(saved));
+        }
+      } catch (e) {
+        console.error('Failed to load from localStorage:', e);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentProject) {
+      loadMeetings();
+    }
+  }, [currentProject]);
 
   useEffect(() => {
     const saved = localStorage.getItem("videoSessions");
@@ -101,18 +150,10 @@ export default function VideoCall() {
         track.enabled = !isMuted;
       });
 
-      toast({
-        title: "Camera & Microphone",
-        description: "Successfully accessed your camera and microphone",
-      });
+      sonnerToast.success("Camera & Microphone accessed successfully");
     } catch (error) {
       console.error("Error accessing media devices:", error);
-      toast({
-        title: "Permission Denied",
-        description:
-          "Please allow access to camera and microphone in your browser settings",
-        variant: "destructive",
-      });
+      sonnerToast.error("Please allow access to camera and microphone in your browser settings");
       setIsVideoOn(false);
     }
   };
@@ -166,63 +207,84 @@ export default function VideoCall() {
     }
   };
 
-  const handleStartCall = (e: React.FormEvent) => {
+  const handleStartCall = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!formData.title.trim()) {
-      toast({
-        title: "Error",
-        description: "Call title is required",
-        variant: "destructive",
-      });
+      sonnerToast.error("Call title is required");
       return;
     }
 
     if (formData.selectedParticipants.length === 0) {
-      toast({
-        title: "Error",
-        description: "Select at least one participant",
-        variant: "destructive",
-      });
+      sonnerToast.error("Select at least one participant");
       return;
     }
 
-    const newSession: VideoCallSession = {
-      id: `call-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-      title: formData.title,
-      description: formData.description,
-      initiatorId: "current-user",
-      initiatorName: "You",
-      participantIds: formData.selectedParticipants,
-      participants: formData.selectedParticipants.map((id) => {
-        const member = teamMembers.find((m) => m.id === id);
-        return {
+    const token = getToken();
+    if (!token || !user || !currentProject) {
+      sonnerToast.error('Not authenticated or no project selected');
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const input: CreateMeetingDto = {
+        title: formData.title,
+        type: formData.type,
+        dateTime: new Date(formData.dateTime).toISOString(),
+        duration: formData.duration,
+        ownerId: user.id,
+        participants: formData.selectedParticipants,
+        agenda: formData.description,
+        projectId: currentProject.id,
+      };
+
+      const newMeeting = await createMeeting(token, input);
+      sonnerToast.success(`Meeting "${formData.title}" created successfully`);
+
+      // Add to local state
+      setMeetings([...meetings, newMeeting]);
+      localStorage.setItem('projectMeetings', JSON.stringify([...meetings, newMeeting]));
+
+      // Also create a video session
+      const newSession: VideoCallSession = {
+        id: newMeeting.id,
+        title: formData.title,
+        description: formData.description,
+        initiatorId: user.id,
+        initiatorName: "You",
+        participantIds: formData.selectedParticipants,
+        participants: formData.selectedParticipants.map((id) => ({
           id,
-          name: member?.name || "Unknown",
+          name: id,
           status: "pending" as const,
-        };
-      }),
-      startedAt: new Date().toISOString(),
-      status: "active",
-      projectId: currentProject?.id,
-      createdAt: new Date().toISOString(),
-    };
+        })),
+        startedAt: new Date().toISOString(),
+        status: "active",
+        projectId: currentProject.id,
+        createdAt: new Date().toISOString(),
+      };
 
-    setSessions([...sessions, newSession]);
-    setActiveSessionId(newSession.id);
-    setOpen(false);
-    resetForm();
-
-    toast({
-      title: "Call Started",
-      description: `Video call "${formData.title}" has been initiated`,
-    });
+      setSessions([...sessions, newSession]);
+      setActiveSessionId(newSession.id);
+      setOpen(false);
+      resetForm();
+    } catch (error) {
+      console.error('Failed to create meeting:', error);
+      sonnerToast.error(error instanceof Error ? error.message : "Failed to create meeting");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resetForm = () => {
     setFormData({
       title: "",
       description: "",
+      type: "standup",
+      duration: 1,
+      dateTime: new Date().toISOString().slice(0, 16),
       selectedParticipants: [],
     });
   };
@@ -243,10 +305,7 @@ export default function VideoCall() {
       )
     );
     setActiveSessionId(sessionId);
-    toast({
-      title: "Connected",
-      description: "You have joined the call",
-    });
+    sonnerToast.success("You have joined the call");
   };
 
   const handleEndCall = (sessionId: string) => {
@@ -262,10 +321,7 @@ export default function VideoCall() {
       )
     );
     setActiveSessionId(null);
-    toast({
-      title: "Call Ended",
-      description: "Video call has been terminated",
-    });
+    sonnerToast.success("Video call has been terminated");
   };
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
@@ -294,7 +350,7 @@ export default function VideoCall() {
             </DialogHeader>
             <form onSubmit={handleStartCall} className="space-y-4">
               <div>
-                <Label>Call Title *</Label>
+                <Label>Meeting Title *</Label>
                 <Input
                   value={formData.title}
                   onChange={(e) =>
@@ -303,76 +359,102 @@ export default function VideoCall() {
                   placeholder="e.g., Team Standup"
                   className="mt-2"
                   required
+                  disabled={loading}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Type</Label>
+                  <select
+                    className="w-full h-10 px-3 rounded-md border border-input bg-background mt-2"
+                    value={formData.type}
+                    onChange={(e) =>
+                      setFormData({ ...formData, type: e.target.value as any })
+                    }
+                    disabled={loading}
+                  >
+                    <option value="standup">Standup</option>
+                    <option value="sprint_planning">Sprint Planning</option>
+                    <option value="sprint_review">Sprint Review</option>
+                    <option value="retrospective">Retrospective</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <Label>Duration (hours)</Label>
+                  <Input
+                    type="number"
+                    value={formData.duration}
+                    onChange={(e) =>
+                      setFormData({ ...formData, duration: parseInt(e.target.value) || 1 })
+                    }
+                    min={1}
+                    max={8}
+                    className="mt-2"
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label>Date & Time</Label>
+                <Input
+                  type="datetime-local"
+                  value={formData.dateTime}
+                  onChange={(e) =>
+                    setFormData({ ...formData, dateTime: e.target.value })
+                  }
+                  className="mt-2"
+                  disabled={loading}
                 />
               </div>
 
               <div>
-                <Label>Description</Label>
+                <Label>Agenda</Label>
                 <Textarea
                   value={formData.description}
                   onChange={(e) =>
                     setFormData({ ...formData, description: e.target.value })
                   }
-                  placeholder="Optional call description"
+                  placeholder="Optional meeting agenda"
                   className="mt-2"
                   rows={3}
+                  disabled={loading}
                 />
               </div>
 
               <div>
-                <Label>Invite Team Members *</Label>
+                <Label>Invite Participants *</Label>
                 <div className="mt-2 space-y-2 max-h-40 overflow-y-auto border border-border/50 rounded-lg p-3 bg-muted/30">
-                  {teamMembers.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">
-                      No team members available
-                    </p>
-                  ) : (
-                    teamMembers.map((member) => (
-                      <label
-                        key={member.id}
-                        className="flex items-center gap-2 p-1 rounded hover:bg-muted/50 cursor-pointer transition-colors"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={formData.selectedParticipants.includes(
-                            member.id
-                          )}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setFormData({
-                                ...formData,
-                                selectedParticipants: [
-                                  ...formData.selectedParticipants,
-                                  member.id,
-                                ],
-                              });
-                            } else {
-                              setFormData({
-                                ...formData,
-                                selectedParticipants:
-                                  formData.selectedParticipants.filter(
-                                    (id) => id !== member.id
-                                  ),
-                              });
-                            }
-                          }}
-                          className="rounded"
-                        />
-                        <img
-                          src={member.image}
-                          alt={member.name}
-                          className="w-6 h-6 rounded-full object-cover"
-                        />
-                        <span className="text-sm">{member.name}</span>
-                      </label>
-                    ))
-                  )}
+                  <label className="flex items-center gap-2 p-1 rounded hover:bg-muted/50 cursor-pointer transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={formData.selectedParticipants.length > 0}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setFormData({
+                            ...formData,
+                            selectedParticipants: [user?.id || ''],
+                          });
+                        } else {
+                          setFormData({
+                            ...formData,
+                            selectedParticipants: [],
+                          });
+                        }
+                      }}
+                      className="rounded"
+                      disabled={loading}
+                    />
+                    <span className="text-sm">Me ({user?.name})</span>
+                  </label>
                 </div>
               </div>
 
-              <Button type="submit" className="w-full gap-2">
+              <Button type="submit" className="w-full gap-2" disabled={loading}>
                 <Video className="w-4 h-4" />
-                Start Call
+                {loading ? 'Creating...' : 'Create Meeting'}
               </Button>
             </form>
           </DialogContent>

@@ -22,11 +22,11 @@ import Sprints from "./pages/Sprints";
 import UserStories from "./pages/UserStories";
 import Team from "./pages/Team";
 import Risks from "./pages/Risks";
-import ProfitSharing from "./pages/ProfitSharing";
 import Finances from "./pages/Finances";
 import Clients from "./pages/Clients";
 import VideoCall from "./pages/VideoCall";
 import Goals from "./pages/Goals";
+import Calendar from "./pages/Calendar";
 import DevOps from "./pages/DevOps";
 import NotFound from "./pages/NotFound";
 
@@ -60,11 +60,11 @@ const AppRoutes = () => {
           <Route path="/stories" element={<UserStories />} />
           <Route path="/team" element={<Team />} />
           <Route path="/risks" element={<Risks />} />
-          <Route path="/profit" element={<ProfitSharing />} />
           <Route path="/finances" element={<Finances />} />
           <Route path="/clients" element={<Clients />} />
           <Route path="/video-call" element={<VideoCall />} />
           <Route path="/goals" element={<Goals />} />
+          <Route path="/calendar" element={<Calendar />} />
           <Route path="/devops" element={<DevOps />} />
         </Route>
         

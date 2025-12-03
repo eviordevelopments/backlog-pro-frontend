@@ -1,6 +1,7 @@
-import { Task, UserStory, Sprint, Risk } from "@/types";
+import { Task, UserStory, Sprint, Risk, FinancialRecord, BudgetAllocation, FundAccount } from "@/types";
 
 const DEFAULT_PROJECT_ID = "default-project";
+const DEFAULT_USER_ID = "default-user";
 
 export const sampleTasks: Task[] = [
   {
@@ -267,6 +268,133 @@ export const sampleRisks: Risk[] = [
   },
 ];
 
+export const sampleFinancialRecords: FinancialRecord[] = [
+  {
+    id: "rec-1",
+    date: "2025-11-01",
+    type: "income",
+    category: "Project Revenue",
+    amount: 5000,
+    projectId: DEFAULT_PROJECT_ID,
+    costType: undefined,
+    description: "Client payment for Q4 services",
+    userId: DEFAULT_USER_ID,
+  },
+  {
+    id: "rec-2",
+    date: "2025-11-02",
+    type: "expense",
+    category: "Salaries",
+    amount: 8000,
+    projectId: DEFAULT_PROJECT_ID,
+    costType: "fixed",
+    description: "Monthly team salaries",
+    userId: DEFAULT_USER_ID,
+  },
+  {
+    id: "rec-3",
+    date: "2025-11-03",
+    type: "expense",
+    category: "Infrastructure",
+    amount: 1200,
+    projectId: DEFAULT_PROJECT_ID,
+    costType: "fixed",
+    description: "Cloud hosting and services",
+    userId: DEFAULT_USER_ID,
+  },
+  {
+    id: "rec-4",
+    date: "2025-11-05",
+    type: "expense",
+    category: "Marketing",
+    amount: 2000,
+    projectId: DEFAULT_PROJECT_ID,
+    costType: "variable",
+    description: "Social media advertising",
+    userId: DEFAULT_USER_ID,
+  },
+  {
+    id: "rec-5",
+    date: "2025-11-08",
+    type: "income",
+    category: "Project Revenue",
+    amount: 3500,
+    projectId: DEFAULT_PROJECT_ID,
+    costType: undefined,
+    description: "Additional milestone payment",
+    userId: DEFAULT_USER_ID,
+  },
+];
+
+export const sampleBudgetAllocations: BudgetAllocation[] = [
+  {
+    id: "alloc-1",
+    totalBudget: 50000,
+    allocations: {
+      technology: 12500,
+      growth: 10000,
+      team: 15000,
+      marketing: 7500,
+      emergency: 2500,
+      investments: 2500,
+    },
+    createdAt: "2025-11-01T10:00:00Z",
+    status: "distributed",
+    userId: DEFAULT_USER_ID,
+  },
+];
+
+export const sampleFundAccounts: FundAccount[] = [
+  {
+    id: "fund-1",
+    name: "Technology",
+    balance: 12500,
+    allocated: 2000,
+    percentage: 25,
+    purpose: "Technology fund for infrastructure and tools",
+  },
+  {
+    id: "fund-2",
+    name: "Growth",
+    balance: 10000,
+    allocated: 3000,
+    percentage: 20,
+    purpose: "Growth fund for business expansion",
+  },
+  {
+    id: "fund-3",
+    name: "Team",
+    balance: 15000,
+    allocated: 8000,
+    percentage: 30,
+    purpose: "Team fund for salaries and benefits",
+  },
+  {
+    id: "fund-4",
+    name: "Marketing",
+    balance: 7500,
+    allocated: 2000,
+    percentage: 15,
+    purpose: "Marketing fund for campaigns and advertising",
+  },
+  {
+    id: "fund-5",
+    name: "Emergency",
+    balance: 2500,
+    allocated: 0,
+    percentage: 5,
+    purpose: "Emergency fund for unexpected expenses",
+  },
+  {
+    id: "fund-6",
+    name: "Investments",
+    balance: 2500,
+    allocated: 500,
+    percentage: 5,
+    purpose: "Investments fund for future opportunities",
+  },
+];
+
 export const initializeSampleData = () => {
   // Initialize sample data only if localStorage is empty (Requirement 10.5)
   if (!localStorage.getItem("tasks")) {
@@ -283,5 +411,17 @@ export const initializeSampleData = () => {
   
   if (!localStorage.getItem("risks")) {
     localStorage.setItem("risks", JSON.stringify(sampleRisks));
+  }
+
+  if (!localStorage.getItem("financialRecords")) {
+    localStorage.setItem("financialRecords", JSON.stringify(sampleFinancialRecords));
+  }
+
+  if (!localStorage.getItem("budgetAllocations")) {
+    localStorage.setItem("budgetAllocations", JSON.stringify(sampleBudgetAllocations));
+  }
+
+  if (!localStorage.getItem("fundAccounts")) {
+    localStorage.setItem("fundAccounts", JSON.stringify(sampleFundAccounts));
   }
 };

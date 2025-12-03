@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
+import { useProjectContext } from "@/context/ProjectContext";
 import { useAuth } from "@/context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,8 @@ import { toast } from "sonner";
 import { loadTeamMembers, updateTeamMember as updateTeamMemberService } from "@/services/teamService";
 
 export default function Team() {
-  const { tasks, currentProject } = useApp();
+  const { tasks } = useApp();
+  const { selectedProject: currentProject } = useProjectContext();
   const { user } = useAuth();
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);

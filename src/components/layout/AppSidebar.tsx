@@ -14,6 +14,8 @@ import {
   User,
   Video,
   Briefcase,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/context/AuthContext";
@@ -29,6 +31,7 @@ import {
   SidebarMenuItem,
   SidebarHeader,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   DropdownMenu,
@@ -48,11 +51,11 @@ const menuItems = [
   { title: "Kanban Board", url: "/kanban", icon: KanbanSquare },
   { title: "Sprints", url: "/sprints", icon: CalendarDays },
   { title: "User Stories", url: "/stories", icon: FileText },
+  { title: "Calendar", url: "/calendar", icon: CalendarDays },
   { title: "Team", url: "/team", icon: Users },
   { title: "Clients", url: "/clients", icon: Users },
   { title: "Video Calls", url: "/video-call", icon: Video },
   { title: "Risk Matrix", url: "/risks", icon: AlertTriangle },
-  { title: "Profit Sharing", url: "/profit", icon: DollarSign },
   { title: "Finances", url: "/finances", icon: Wallet },
   { title: "Goals", url: "/goals", icon: Target },
   { title: "DevOps Metrics", url: "/devops", icon: Activity },
@@ -61,6 +64,7 @@ const menuItems = [
 export function AppSidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { toggleSidebar, state } = useSidebar();
 
   const handleLogout = async () => {
     try {
@@ -82,16 +86,31 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar>
-      <SidebarHeader className="p-4">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-            <LayoutDashboard className="h-5 w-5 text-white" />
+    <Sidebar className="flex flex-col">
+      <SidebarHeader className="p-4 flex items-center justify-between gap-2">
+        <div className="flex flex-row justify-between w-full">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <img src="/evior-logo.png" alt="E-vior" className="h-8 w-auto flex-shrink-0" />
+            {state === "expanded" && (
+              <div className="flex flex-col gap-0 min-w-0">
+                <h2 className="font-bold text-sm text-gradient truncate leading-tight">Backlog Pro</h2>
+                <p className="text-xs text-muted-foreground truncate leading-tight">Agile Suite</p>
+              </div>
+            )}
           </div>
-          <div>
-            <h2 className="font-bold text-lg text-gradient">Backlog Pro</h2>
-            <p className="text-xs text-muted-foreground">Agile Suite</p>
-          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleSidebar}
+            className="h-8 w-8 flex-shrink-0"
+            title={state === "expanded" ? "Close sidebar" : "Open sidebar"}
+          >
+            {state === "expanded" ? (
+              <ChevronLeft className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </Button>
         </div>
       </SidebarHeader>
       <SidebarContent>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
+import { useProjectContext } from '@/context/ProjectContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TrendingUp, TrendingDown, DollarSign, PieChart } from 'lucide-react';
@@ -17,7 +18,8 @@ interface Transaction {
 }
 
 export default function FinancialOverview() {
-  const { currentProject, profitShares } = useApp();
+  const { profitShares } = useApp();
+  const { selectedProject: currentProject } = useProjectContext();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
 

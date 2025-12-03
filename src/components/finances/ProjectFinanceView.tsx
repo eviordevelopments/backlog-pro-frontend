@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
+import { useProjectContext } from "@/context/ProjectContext";
+import { useProjects } from "@/hooks/use-projects";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +17,8 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { FinancialCategory } from "@/types";
 import { toast } from "@/components/ui/use-toast";
+import TeamSalaryDistribution from "./TeamSalaryDistribution";
+import CalculatedSalaries from "./CalculatedSalaries";
 
 const DEFAULT_FINANCIAL_STRUCTURE: FinancialCategory[] = [
   {
@@ -56,7 +60,10 @@ const DEFAULT_FINANCIAL_STRUCTURE: FinancialCategory[] = [
 ];
 
 export default function ProjectFinanceView() {
-  const { currentProject, updateProject, teamMembers, profitShares } = useApp();
+  const { updateProject: updateProjectLocal, teamMembers, profitShares } = useApp();
+  const { selectedProject: currentProject } = useProjectContext();
+  const { updateProject: updateProjectBackend } = useProjects();
+  const [isSaving, setIsSaving] = useState(false);
   const [financialStructure, setFinancialStructure] = useState<
     FinancialCategory[]
   >([]);
@@ -68,7 +75,7 @@ export default function ProjectFinanceView() {
   useEffect(() => {
     if (currentProject) {
       setFinancialStructure(
-        currentProject.financialStructure || DEFAULT_FINANCIAL_STRUCTURE
+        ((currentProject as any).financialStructure) || DEFAULT_FINANCIAL_STRUCTURE
       );
       setBudget(currentProject.budget || 0);
       setSpent(currentProject.spent || 0);
@@ -96,7 +103,7 @@ export default function ProjectFinanceView() {
     );
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (totalPercentage !== 100) {
       toast({
         title: "Invalid Distribution",
@@ -107,23 +114,43 @@ export default function ProjectFinanceView() {
     }
 
     if (currentProject) {
-      updateProject(currentProject.id, {
-        financialStructure,
-        budget,
-        spent,
-      });
-      setIsEditing(false);
-      toast({
-        title: "Financial Structure Updated",
-        description: "Project financial structure has been saved successfully",
-      });
+      setIsSaving(true);
+      try {
+        // Save to backend
+        await updateProjectBackend(currentProject.id, {
+          financialStructure,
+          budget,
+          spent,
+        });
+
+        // Also update local context
+        updateProjectLocal(currentProject.id, {
+          financialStructure,
+          budget,
+          spent,
+        });
+
+        setIsEditing(false);
+        toast({
+          title: "Financial Structure Updated",
+          description: "Project financial structure has been saved successfully",
+        });
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : "Failed to save project",
+          variant: "destructive",
+        });
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
   const handleReset = () => {
     if (currentProject) {
       setFinancialStructure(
-        currentProject.financialStructure || DEFAULT_FINANCIAL_STRUCTURE
+        ((currentProject as any).financialStructure) || DEFAULT_FINANCIAL_STRUCTURE
       );
       setBudget(currentProject.budget || 0);
       setSpent(currentProject.spent || 0);
@@ -184,11 +211,11 @@ export default function ProjectFinanceView() {
                   <Button
                     size="sm"
                     onClick={handleSave}
-                    disabled={totalPercentage !== 100}
+                    disabled={totalPercentage !== 100 || isSaving}
                     className="gap-2"
                   >
                     <Save className="w-4 h-4" />
-                    Save
+                    {isSaving ? "Saving..." : "Save"}
                   </Button>
                 </>
               ) : (
@@ -301,13 +328,22 @@ export default function ProjectFinanceView() {
                 {isEditing && (
                   <Button
                     size="sm"
-                    onClick={() => {
+                    onClick={async () => {
                       if (currentProject) {
-                        updateProject(currentProject.id, { budget });
-                        toast({
-                          title: "Budget Updated",
-                          description: "Project budget has been updated",
-                        });
+                        try {
+                          await updateProjectBackend(currentProject.id, { budget });
+                          updateProjectLocal(currentProject.id, { budget });
+                          toast({
+                            title: "Budget Updated",
+                            description: "Project budget has been updated",
+                          });
+                        } catch (error) {
+                          toast({
+                            title: "Error",
+                            description: "Failed to update budget",
+                            variant: "destructive",
+                          });
+                        }
                       }
                     }}
                   >
@@ -330,13 +366,22 @@ export default function ProjectFinanceView() {
                 {isEditing && (
                   <Button
                     size="sm"
-                    onClick={() => {
+                    onClick={async () => {
                       if (currentProject) {
-                        updateProject(currentProject.id, { spent });
-                        toast({
-                          title: "Spending Updated",
-                          description: "Project spending has been updated",
-                        });
+                        try {
+                          await updateProjectBackend(currentProject.id, { spent });
+                          updateProjectLocal(currentProject.id, { spent });
+                          toast({
+                            title: "Spending Updated",
+                            description: "Project spending has been updated",
+                          });
+                        } catch (error) {
+                          toast({
+                            title: "Error",
+                            description: "Failed to update spending",
+                            variant: "destructive",
+                          });
+                        }
                       }
                     }}
                   >
@@ -383,85 +428,26 @@ export default function ProjectFinanceView() {
         </CardContent>
       </Card>
 
-      {/* Team Profit Share */}
-      <Card className="glass">
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <Users className="w-5 h-5 text-purple-600" />
-            <div>
-              <CardTitle>Team Profit Share</CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
-                Project team member earnings
-              </p>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {teamMembers.length === 0 ? (
-            <p className="text-muted-foreground text-center py-8">
-              No team members assigned to this project
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {teamMembers.map((member) => {
-                const memberShares = profitShares.filter(
-                  (share) =>
-                    share.projectId === currentProject.id &&
-                    share.memberId === member.id
-                );
-                const totalEarned = memberShares.reduce(
-                  (sum, share) => sum + share.amount,
-                  0
-                );
+      {/* Team Salary Distribution */}
+      <TeamSalaryDistribution
+        operationalPercentage={
+          financialStructure.find((cat) =>
+            cat.category.toLowerCase().includes("operational")
+          )?.percentage || 0
+        }
+        totalRevenue={budget}
+      />
 
-                return (
-                  <div
-                    key={member.id}
-                    className="p-4 rounded-xl glass border border-border/50"
-                  >
-                    <div className="flex items-center gap-3 mb-4">
-                      <img
-                        src={member.image}
-                        alt={member.name}
-                        className="w-12 h-12 rounded-full object-cover"
-                      />
-                      <div>
-                        <h5 className="font-semibold text-foreground">
-                          {member.name}
-                        </h5>
-                        <p className="text-sm text-muted-foreground">
-                          {member.role}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">
-                          Earned
-                        </span>
-                        <span className="font-bold text-success">
-                          ${totalEarned.toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">
-                          Share %
-                        </span>
-                        <span className="font-bold">
-                          {memberShares.length > 0
-                            ? memberShares[0].percentage.toFixed(1)
-                            : "0"}
-                          %
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Calculated Salaries */}
+      <CalculatedSalaries
+        operationalBudget={
+          (budget *
+            (((currentProject as any)?.financialStructure || financialStructure).find((cat: any) =>
+              cat.category.toLowerCase().includes("operational")
+            )?.percentage || 0)) /
+          100
+        }
+      />
     </div>
   );
 }
