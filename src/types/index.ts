@@ -251,3 +251,25 @@ export interface ProjectFinancial {
   profit: number;
   margin: number;
 }
+
+// Calendar Filter Types
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  date: Date;
+  type: 'task' | 'sprint' | 'meeting' | 'deadline';
+  color: string;
+  assignee?: string;
+  assigneeId?: string;
+}
+
+export interface FilterState {
+  categories: {
+    tasks: boolean;
+    sprints: boolean;
+    meetings: boolean;
+    deadlines: boolean;
+  };
+  teamMembers: string[];
+  viewMode: 'week' | 'month';
+}

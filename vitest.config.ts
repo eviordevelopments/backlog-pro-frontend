@@ -7,8 +7,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    include: ['tests/backlog-pro/**/*.test.ts', 'tests/backlog-pro/**/*.test.tsx', 'tests/auth/**/*.test.ts', 'tests/auth/**/*.test.tsx', 'tests/supabase/**/*.test.ts'],
-    setupFiles: ['./tests/backlog-pro/setup.ts'],
+    include: ['tests/backlog-pro/**/*.test.ts', 'tests/backlog-pro/**/*.test.tsx', 'tests/auth/**/*.test.ts', 'tests/auth/**/*.test.tsx', 'tests/supabase/**/*.test.ts', 'tests/calendar-filters-views/**/*.test.ts', 'tests/calendar-filters-views/**/*.test.tsx', 'tests/financial-period-filter/**/*.test.ts', 'tests/financial-period-filter/**/*.test.tsx'],
+    setupFiles: ['./tests/backlog-pro/setup.ts', './tests/calendar-filters-views/setup.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

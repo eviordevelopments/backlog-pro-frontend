@@ -13,6 +13,7 @@ import FinancialTrendAnalysis from "@/components/finances/FinancialTrendAnalysis
 import BudgetAllocationHistory from "@/components/finances/BudgetAllocationHistory";
 import FinancialDataExport from "@/components/finances/FinancialDataExport";
 import ProfitSharingCalculator from "@/components/finances/ProfitSharingCalculator";
+import FinancialPeriodAnalysis from "@/components/finances/FinancialPeriodAnalysis";
 
 export default function Finances() {
   const { selectedProject: currentProject } = useProjectContext();
@@ -46,12 +47,17 @@ export default function Finances() {
         </TabsContent>
 
         <TabsContent value="analysis" className="space-y-6">
-          <Tabs defaultValue="income-expense" className="space-y-6">
+          <Tabs defaultValue="period" className="space-y-6">
             <TabsList className="glass">
+              <TabsTrigger value="period">Period Analysis</TabsTrigger>
               <TabsTrigger value="income-expense">Income & Expense</TabsTrigger>
               <TabsTrigger value="costs">Cost Breakdown</TabsTrigger>
               <TabsTrigger value="trends">Trends</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="period" className="space-y-6">
+              <FinancialPeriodAnalysis />
+            </TabsContent>
 
             <TabsContent value="income-expense" className="space-y-6">
               <IncomeExpenseAnalysis />
