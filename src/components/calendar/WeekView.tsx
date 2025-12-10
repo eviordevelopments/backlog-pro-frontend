@@ -5,9 +5,10 @@ import EventCell from './EventCell';
 interface WeekViewProps {
   currentDate: Date;
   events: CalendarEvent[];
+  onEventClick?: (event: CalendarEvent) => void;
 }
 
-export default function WeekView({ currentDate, events }: WeekViewProps) {
+export default function WeekView({ currentDate, events, onEventClick }: WeekViewProps) {
   const weekStart = startOfWeek(currentDate);
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -60,7 +61,11 @@ export default function WeekView({ currentDate, events }: WeekViewProps) {
             >
               <div className="space-y-1">
                 {dayEvents.map(event => (
-                  <EventCell key={event.id} event={event} />
+                  <EventCell
+                    key={event.id}
+                    event={event}
+                    onClick={onEventClick}
+                  />
                 ))}
                 {dayEvents.length === 0 && (
                   <div className="text-xs text-muted-foreground p-1">No events</div>

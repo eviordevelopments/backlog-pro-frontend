@@ -15,7 +15,7 @@ describe('Property 13: View Preference Persistence', () => {
   it('should persist and restore view mode exactly', () => {
     fc.assert(
       fc.property(
-        fc.constantFrom('week', 'month') as fc.Arbitrary<'week' | 'month'>,
+        fc.constantFrom('day', 'week', 'month') as fc.Arbitrary<'day' | 'week' | 'month'>,
         fc.array(fc.uuid(), { minLength: 0, maxLength: 5 }),
         (viewMode, teamMembers) => {
           const originalState: FilterState = {
@@ -39,13 +39,13 @@ describe('Property 13: View Preference Persistence', () => {
     );
   });
 
-  it('should default to month view when no state is saved', () => {
+  it('should default to day view when no state is saved', () => {
     fc.assert(
       fc.property(fc.array(fc.uuid(), { minLength: 0, maxLength: 5 }), (teamMembers) => {
         localStorage.clear();
         const state = loadFilterState(teamMembers);
 
-        expect(state.viewMode).toBe('month');
+        expect(state.viewMode).toBe('day');
       }),
       { numRuns: 100 }
     );
@@ -54,7 +54,7 @@ describe('Property 13: View Preference Persistence', () => {
   it('should handle invalid view mode in stored state', () => {
     fc.assert(
       fc.property(
-        fc.string().filter(s => s !== 'week' && s !== 'month'),
+        fc.string().filter(s => s !== 'day' && s !== 'week' && s !== 'month'),
         fc.array(fc.uuid(), { minLength: 0, maxLength: 5 }),
         (invalidViewMode, teamMembers) => {
           const invalidState = {
@@ -71,7 +71,7 @@ describe('Property 13: View Preference Persistence', () => {
           localStorage.setItem('calendar_filter_state', JSON.stringify(invalidState));
           const restoredState = loadFilterState(teamMembers);
 
-          expect(restoredState.viewMode).toBe('month');
+          expect(restoredState.viewMode).toBe('day');
         }
       ),
       { numRuns: 100 }
@@ -81,7 +81,7 @@ describe('Property 13: View Preference Persistence', () => {
   it('should preserve view mode across multiple save/load cycles', () => {
     fc.assert(
       fc.property(
-        fc.constantFrom('week', 'month') as fc.Arbitrary<'week' | 'month'>,
+        fc.constantFrom('day', 'week', 'month') as fc.Arbitrary<'day' | 'week' | 'month'>,
         fc.array(fc.uuid(), { minLength: 0, maxLength: 5 }),
         (viewMode, teamMembers) => {
           const originalState: FilterState = {

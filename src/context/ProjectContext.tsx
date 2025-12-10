@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { listProjects, createProject, Project, CreateProjectInput } from "@/api/projects/projects";
+import { listProjects, createProject, Project, CreateProjectDto } from "@/api/projects/projects";
 
 interface ProjectContextType {
   projects: Project[];
@@ -7,7 +7,7 @@ interface ProjectContextType {
   setSelectedProject: (projectId: string) => void;
   loading: boolean;
   error: string | null;
-  createNewProject: (input: CreateProjectInput) => Promise<Project>;
+  createNewProject: (input: CreateProjectDto) => Promise<Project>;
   refreshProjects: () => Promise<void>;
 }
 
@@ -66,7 +66,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   };
 
-  const createNewProject = async (input: CreateProjectInput): Promise<Project> => {
+  const createNewProject = async (input: CreateProjectDto): Promise<Project> => {
     try {
       const sessionData = localStorage.getItem("auth_session");
       if (!sessionData) {

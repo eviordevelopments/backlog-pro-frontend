@@ -11,7 +11,7 @@ const LIST_PROJECTS_QUERY = `
 `;
 
 const CREATE_PROJECT_MUTATION = `
-  mutation CreateProject($input: CreateProjectInput!) {
+  mutation CreateProject($input: CreateProjectDto!) {
     createProject(input: $input) {
       id
       name
@@ -36,7 +36,7 @@ export interface Project {
   description?: string;
 }
 
-export interface CreateProjectInput {
+export interface CreateProjectDto {
   name: string;
   description?: string;
 }
@@ -117,7 +117,7 @@ export async function listProjects(token: string): Promise<Project[]> {
 
 export async function createProject(
   token: string,
-  input: CreateProjectInput
+  input: CreateProjectDto
 ): Promise<Project> {
   try {
     const response = await fetch(GRAPHQL_ENDPOINT, {

@@ -10,6 +10,7 @@ import {
 interface EventCellProps {
   event: CalendarEvent;
   compact?: boolean;
+  onClick?: (event: CalendarEvent) => void;
 }
 
 const EVENT_TYPE_COLORS = {
@@ -26,7 +27,7 @@ const EVENT_TYPE_LABELS = {
   deadline: 'Deadline',
 };
 
-export default function EventCell({ event, compact = false }: EventCellProps) {
+export default function EventCell({ event, compact = false, onClick }: EventCellProps) {
   const colorClass = EVENT_TYPE_COLORS[event.type] || EVENT_TYPE_COLORS.task;
 
   const tooltipContent = (
@@ -44,6 +45,7 @@ export default function EventCell({ event, compact = false }: EventCellProps) {
         compact ? 'text-xs truncate' : 'text-xs'
       }`}
       title={event.title}
+      onClick={() => onClick?.(event)}
     >
       {event.title}
     </div>

@@ -359,9 +359,10 @@ export function validateBudgetAllocation(allocation: BudgetAllocation): boolean 
 // Fund Account Operations
 
 export function createFundAccount(
-  name: FundAccount['name'],
+  name: string,
   percentage: number,
-  totalBudget: number
+  totalBudget: number,
+  allocationCategory: FundAccount['allocationCategory']
 ): FundAccount {
   if (typeof percentage !== 'number' || percentage < 0 || percentage > 100 || !isFinite(percentage)) {
     throw new Error('Fund percentage must be between 0 and 100');
@@ -376,6 +377,7 @@ export function createFundAccount(
     allocated: 0,
     percentage,
     purpose: `${name} fund for business operations`,
+    allocationCategory,
   };
 }
 

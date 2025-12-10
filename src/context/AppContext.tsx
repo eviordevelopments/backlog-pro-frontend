@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, useMemo } from "react";
 import {
   Task,
   TaskPriority,
@@ -133,17 +133,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const [financialMetrics, setFinancialMetrics] = useState<FinancialMetrics>(initialFinancialMetrics);
   const [currentPeriodType, setCurrentPeriodType] = useState<PeriodType>('monthly');
   const [aggregatedFinancialData, setAggregatedFinancialData] = useState<FinancialPeriod[]>([]);
+  const [migrationDone, setMigrationDone] = useState(false);
 
-  // Filter data by authenticated user's ID (Requirement 8.4)
-  const projects = userId ? allProjects.filter(p => p.userId === userId) : allProjects;
-  const tasks = userId ? allTasks.filter(t => t.userId === userId) : allTasks;
-  const userStories = userId ? allUserStories.filter(s => s.userId === userId) : allUserStories;
-  const sprints = userId ? allSprints.filter(s => s.userId === userId) : allSprints;
-  const risks = userId ? allRisks.filter(r => r.userId === userId) : allRisks;
-  const profitShares = userId ? allProfitShares.filter(p => p.userId === userId) : allProfitShares;
-  const financialRecords = userId ? allFinancialRecords.filter(r => r.userId === userId) : allFinancialRecords;
-  const budgetAllocations = userId ? allBudgetAllocations.filter(a => a.userId === userId) : allBudgetAllocations;
-  const fundAccounts = userId ? allFundAccounts.filter(f => f.id) : allFundAccounts;
+  // Memoize filtered data to prevent infinite loops
+  const projects = useMemo(() => 
+    userId ? allProjects.filter(p => p.userId === userId) : allProjects,
+    [userId, allProjects]
+  );
+  
+  const tasks = useMemo(() => 
+    userId ? allTasks.filter(t => t.userId === userId) : allTasks,
+    [userId, allTasks]
+  );
+  
+  const userStories = useMemo(() => 
+    userId ? allUserStories.filter(s => s.userId === userId) : allUserStories,
+    [userId, allUserStories]
+  );
+  
+  const sprints = useMemo(() => 
+    userId ? allSprints.filter(s => s.userId === userId) : allSprints,
+    [userId, allSprints]
+  );
+  
+  const risks = useMemo(() => 
+    userId ? allRisks.filter(r => r.userId === userId) : allRisks,
+    [userId, allRisks]
+  );
+  
+  const profitShares = useMemo(() => 
+    userId ? allProfitShares.filter(p => p.userId === userId) : allProfitShares,
+    [userId, allProfitShares]
+  );
+  
+  const financialRecords = useMemo(() => 
+    userId ? allFinancialRecords.filter(r => r.userId === userId) : allFinancialRecords,
+    [userId, allFinancialRecords]
+  );
+  
+  const budgetAllocations = useMemo(() => 
+    userId ? allBudgetAllocations.filter(a => a.userId === userId) : allBudgetAllocations,
+    [userId, allBudgetAllocations]
+  );
+  
+  const fundAccounts = useMemo(() => 
+    userId ? allFundAccounts.filter(f => f.id) : allFundAccounts,
+    [userId, allFundAccounts]
+  );
 
   // Load from localStorage on app initialization (Requirement 10.4)
   useEffect(() => {
@@ -188,6 +224,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     if (savedFinancialMetrics) setFinancialMetrics(JSON.parse(savedFinancialMetrics));
   }, []);
 
+
+
   // Listen for logout events and clear user-specific data (Requirement 7.5)
   useEffect(() => {
     // When user becomes null (logout), clear all user-specific data
@@ -204,37 +242,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Auto-create TeamMember for registered users
   useEffect(() => {
-    if (user) {
-      // Check if a team member already exists for this user
-      const existingMember = teamMembers.find(
-        member => member.name.toLowerCase() === user.name.toLowerCase()
-      );
-
-      if (!existingMember) {
-        // Create a new team member for this user
-        const newMember: TeamMember = {
-          id: user.id,
-          name: user.name,
-          role: "Developer", // Default role
-          skills: [],
-          availability: 100,
-          image: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.name}`,
-          tasksCompleted: 0,
-          averageCycleTime: 0,
-          velocity: 0,
-        };
-
-        setTeamMembers(prev => [...prev, newMember]);
-      }
+    if (user && teamMembers.length === 0) {
+      const newMember: TeamMember = {
+        id: user.id,
+        name: user.name,
+        role: "Developer",
+        skills: [],
+        availability: 100,
+        image: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.name}`,
+        tasksCompleted: 0,
+        averageCycleTime: 0,
+        velocity: 0,
+      };
+      setTeamMembers([newMember]);
     }
-  }, [user]);
+  }, [user?.id]);
 
   // Data migration for existing users (Requirement 8.2)
   useEffect(() => {
-    if (userId) {
+    if (userId && !migrationDone) {
       let needsMigration = false;
 
-      // Check if existing data lacks userId fields
       const migratedProjects = allProjects.map(project => {
         if (!project.userId || project.userId === '') {
           needsMigration = true;
@@ -283,7 +311,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         return share;
       });
 
-      // If migration is needed, update state and localStorage
       if (needsMigration) {
         setAllProjects(migratedProjects);
         setAllTasks(migratedTasks);
@@ -291,66 +318,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         setAllSprints(migratedSprints);
         setAllRisks(migratedRisks);
         setAllProfitShares(migratedProfitShares);
+        setMigrationDone(true);
+      } else {
+        setMigrationDone(true);
       }
     }
-  }, [userId]); // Run when userId changes (user logs in)
+  }, [userId]);
 
-  // Save to localStorage on create/update/delete (Requirements 10.1, 10.2, 10.3)
-  useEffect(() => {
-    if (allProjects.length > 0) {
-      localStorage.setItem("projects", JSON.stringify(allProjects));
-    }
-  }, [allProjects]);
 
-  useEffect(() => {
-    if (currentProject) {
-      localStorage.setItem("currentProject", JSON.stringify(currentProject));
-    }
-  }, [currentProject]);
-
-  useEffect(() => {
-    localStorage.setItem("tasks", JSON.stringify(allTasks));
-  }, [allTasks]);
-
-  useEffect(() => {
-    localStorage.setItem("userStories", JSON.stringify(allUserStories));
-  }, [allUserStories]);
-
-  useEffect(() => {
-    localStorage.setItem("sprints", JSON.stringify(allSprints));
-  }, [allSprints]);
-
-  useEffect(() => {
-    localStorage.setItem("teamMembers", JSON.stringify(teamMembers));
-  }, [teamMembers]);
-
-  useEffect(() => {
-    localStorage.setItem("risks", JSON.stringify(allRisks));
-  }, [allRisks]);
-
-  useEffect(() => {
-    localStorage.setItem("profitShares", JSON.stringify(allProfitShares));
-  }, [allProfitShares]);
-
-  useEffect(() => {
-    localStorage.setItem("kpiMetrics", JSON.stringify(kpiMetrics));
-  }, [kpiMetrics]);
-
-  useEffect(() => {
-    localStorage.setItem("financialRecords", JSON.stringify(allFinancialRecords));
-  }, [allFinancialRecords]);
-
-  useEffect(() => {
-    localStorage.setItem("budgetAllocations", JSON.stringify(allBudgetAllocations));
-  }, [allBudgetAllocations]);
-
-  useEffect(() => {
-    localStorage.setItem("fundAccounts", JSON.stringify(allFundAccounts));
-  }, [allFundAccounts]);
-
-  useEffect(() => {
-    localStorage.setItem("financialMetrics", JSON.stringify(financialMetrics));
-  }, [financialMetrics]);
 
   // Aggregate financial data based on period type (Requirements 1.2, 1.3, 1.4)
   useEffect(() => {
@@ -875,6 +850,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     if (typeof fund.balance !== 'number' || fund.balance < 0 || !isFinite(fund.balance)) {
       throw new Error('Fund balance must be a non-negative number');
     }
+    if (!fund.name || fund.name.trim() === '') {
+      throw new Error('Fund name is required');
+    }
+    
+    // Validate allocation category is one of the six valid options (Requirement 1.5)
+    const validCategories = ['Technology', 'Growth', 'Team', 'Marketing', 'Emergency', 'Investments'];
+    if (!fund.allocationCategory || !validCategories.includes(fund.allocationCategory)) {
+      throw new Error('Allocation category must be one of: Technology, Growth, Team, Marketing, Emergency, Investments');
+    }
 
     setAllFundAccounts([...allFundAccounts, fund]);
   };
@@ -888,6 +872,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     if (updates.percentage !== undefined) {
       if (typeof updates.percentage !== 'number' || updates.percentage < 0 || updates.percentage > 100 || !isFinite(updates.percentage)) {
         throw new Error('Fund percentage must be between 0 and 100');
+      }
+    }
+    
+    // Validate allocation category if provided (Requirement 3.2)
+    if (updates.allocationCategory !== undefined) {
+      const validCategories = ['Technology', 'Growth', 'Team', 'Marketing', 'Emergency', 'Investments'];
+      if (!validCategories.includes(updates.allocationCategory)) {
+        throw new Error('Allocation category must be one of: Technology, Growth, Team, Marketing, Emergency, Investments');
       }
     }
 

@@ -10,7 +10,7 @@ export const getDefaultFilterState = (teamMemberIds: string[] = []): FilterState
     deadlines: true,
   },
   teamMembers: teamMemberIds,
-  viewMode: 'month',
+  viewMode: 'day',
 });
 
 export const saveFilterState = (state: FilterState): void => {
@@ -39,7 +39,7 @@ export const loadFilterState = (teamMemberIds: string[] = []): FilterState => {
         deadlines: parsed.categories?.deadlines ?? defaultState.categories.deadlines,
       },
       teamMembers: Array.isArray(parsed.teamMembers) ? parsed.teamMembers : defaultState.teamMembers,
-      viewMode: parsed.viewMode === 'week' || parsed.viewMode === 'month' ? parsed.viewMode : defaultState.viewMode,
+      viewMode: parsed.viewMode === 'day' || parsed.viewMode === 'week' || parsed.viewMode === 'month' ? parsed.viewMode : defaultState.viewMode,
     };
   } catch (error) {
     console.error('Failed to load filter state from localStorage:', error);

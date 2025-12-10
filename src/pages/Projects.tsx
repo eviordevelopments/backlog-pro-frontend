@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useProjectContext } from "@/context/ProjectContext";
 import { useClientContext } from "@/context/ClientContext";
-import { getProject, updateProject, deleteProject, Project, CreateProjectInput, UpdateProjectInput } from "@/api/projects/projects";
+import { getProject, updateProject, deleteProject, Project, CreateProjectDto, UpdateProjectDto } from "@/api/projects/projects";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -102,7 +102,7 @@ export default function Projects() {
   const onCreateSubmit = async (data: CreateProjectFormValues) => {
     try {
       setCreating(true);
-      await createNewProject(data as CreateProjectInput);
+      await createNewProject(data as CreateProjectDto);
       createForm.reset();
       setOpenCreate(false);
       toast({
@@ -130,7 +130,7 @@ export default function Projects() {
         throw new Error("No active session");
       }
       const session = JSON.parse(sessionData);
-      await updateProject(session.accessToken, editingProject.id, data as UpdateProjectInput);
+      await updateProject(session.accessToken, editingProject.id, data as UpdateProjectDto);
       await refreshProjects();
       updateForm.reset();
       setOpenEdit(false);
@@ -440,15 +440,15 @@ export default function Projects() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Progress</p>
-                  <p className="font-semibold">{selectedProject.progress}%</p>
+                  <p className="font-semibold">{selectedProject.progress || 0}%</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Budget</p>
-                  <p className="font-semibold">${selectedProject.budget.toLocaleString()}</p>
+                  <p className="font-semibold">${(selectedProject.budget || 0).toLocaleString()}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Spent</p>
-                  <p className="font-semibold">${selectedProject.spent.toLocaleString()}</p>
+                  <p className="font-semibold">${(selectedProject.spent || 0).toLocaleString()}</p>
                 </div>
               </div>
 
@@ -533,12 +533,12 @@ export default function Projects() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Progress</span>
-                    <span className="font-semibold">{project.progress}%</span>
+                    <span className="font-semibold">{project.progress || 0}%</span>
                   </div>
                   <div className="w-full bg-muted rounded-full h-2">
                     <div
                       className="bg-primary h-2 rounded-full transition-all"
-                      style={{ width: `${project.progress}%` }}
+                      style={{ width: `${project.progress || 0}%` }}
                     />
                   </div>
                 </div>
@@ -549,7 +549,7 @@ export default function Projects() {
                     <DollarSign className="h-4 w-4" />
                     Budget
                   </div>
-                  <span className="font-semibold">${project.budget.toLocaleString()}</span>
+                  <span className="font-semibold">${(project.budget || 0).toLocaleString()}</span>
                 </div>
 
                 {/* Start Date */}

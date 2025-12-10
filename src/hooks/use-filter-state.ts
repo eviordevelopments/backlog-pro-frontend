@@ -41,7 +41,7 @@ export const useFilterState = (teamMemberIds: string[] = []) => {
     }));
   }, []);
 
-  const updateViewMode = useCallback((viewMode: 'week' | 'month') => {
+  const updateViewMode = useCallback((viewMode: 'day' | 'week' | 'month') => {
     setFilterState(prev => ({
       ...prev,
       viewMode,

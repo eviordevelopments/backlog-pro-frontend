@@ -1,13 +1,16 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { format, addMonths, subMonths, addWeeks, subWeeks } from 'date-fns';
+import { format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays } from 'date-fns';
 import { CalendarEvent } from '@/types';
+import DayView from './DayView';
 import WeekView from './WeekView';
 import MonthView from './MonthView';
+import EventDetailsModal from './EventDetailsModal';
 
 interface CalendarGridProps {
-  view: 'week' | 'month';
+  view: 'day' | 'week' | 'month';
   currentDate: Date;
   events: CalendarEvent[];
   onDateChange: (date: Date) => void;
@@ -19,8 +22,11 @@ export default function CalendarGrid({
   events,
   onDateChange,
 }: CalendarGridProps) {
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const handlePreviousPeriod = () => {
-    if (view === 'week') {
+    if (view === 'day') {
+      onDateChange(subDays(currentDate, 1));
+    } else if (view === 'week') {
       onDateChange(subWeeks(currentDate, 1));
     } else {
       onDateChange(subMonths(currentDate, 1));
@@ -28,7 +34,9 @@ export default function CalendarGrid({
   };
 
   const handleNextPeriod = () => {
-    if (view === 'week') {
+    if (view === 'day') {
+      onDateChange(addDays(currentDate, 1));
+    } else if (view === 'week') {
       onDateChange(addWeeks(currentDate, 1));
     } else {
       onDateChange(addMonths(currentDate, 1));
@@ -40,7 +48,9 @@ export default function CalendarGrid({
   };
 
   const getHeaderTitle = () => {
-    if (view === 'week') {
+    if (view === 'day') {
+      return format(currentDate, 'EEEE, MMMM d, yyyy');
+    } else if (view === 'week') {
       const weekStart = new Date(currentDate);
       weekStart.setDate(weekStart.getDate() - weekStart.getDay());
       const weekEnd = new Date(weekStart);
@@ -60,7 +70,7 @@ export default function CalendarGrid({
               variant="outline"
               size="sm"
               onClick={handlePreviousPeriod}
-              aria-label={view === 'week' ? 'Previous week' : 'Previous month'}
+              aria-label={view === 'day' ? 'Previous day' : view === 'week' ? 'Previous week' : 'Previous month'}
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -75,7 +85,7 @@ export default function CalendarGrid({
               variant="outline"
               size="sm"
               onClick={handleNextPeriod}
-              aria-label={view === 'week' ? 'Next week' : 'Next month'}
+              aria-label={view === 'day' ? 'Next day' : view === 'week' ? 'Next week' : 'Next month'}
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -105,13 +115,22 @@ export default function CalendarGrid({
           </div>
 
           {/* Calendar View */}
-          {view === 'week' ? (
-            <WeekView currentDate={currentDate} events={events} />
+          {view === 'day' ? (
+            <DayView currentDate={currentDate} events={events} onEventClick={setSelectedEvent} />
+          ) : view === 'week' ? (
+            <WeekView currentDate={currentDate} events={events} onEventClick={setSelectedEvent} />
           ) : (
-            <MonthView currentDate={currentDate} events={events} />
+            <MonthView currentDate={currentDate} events={events} onEventClick={setSelectedEvent} />
           )}
         </div>
       </CardContent>
+
+      {/* Event Details Modal */}
+      <EventDetailsModal
+        event={selectedEvent}
+        open={!!selectedEvent}
+        onOpenChange={(open) => !open && setSelectedEvent(null)}
+      />
     </Card>
   );
 }

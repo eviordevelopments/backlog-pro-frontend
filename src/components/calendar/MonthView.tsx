@@ -5,9 +5,10 @@ import EventCell from './EventCell';
 interface MonthViewProps {
   currentDate: Date;
   events: CalendarEvent[];
+  onEventClick?: (event: CalendarEvent) => void;
 }
 
-export default function MonthView({ currentDate, events }: MonthViewProps) {
+export default function MonthView({ currentDate, events, onEventClick }: MonthViewProps) {
   const monthStart = startOfMonth(currentDate);
   const startDate = new Date(monthStart);
   startDate.setDate(startDate.getDate() - monthStart.getDay());
@@ -62,7 +63,12 @@ export default function MonthView({ currentDate, events }: MonthViewProps) {
               </div>
               <div className="space-y-1">
                 {dayEvents.slice(0, 4).map(event => (
-                  <EventCell key={event.id} event={event} compact />
+                  <EventCell
+                    key={event.id}
+                    event={event}
+                    compact
+                    onClick={onEventClick}
+                  />
                 ))}
                 {dayEvents.length > 4 && (
                   <div className="text-xs text-muted-foreground px-1 font-semibold">

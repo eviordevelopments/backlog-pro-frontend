@@ -403,11 +403,12 @@ describe('BudgetAllocationHistory Component', () => {
     const mockFundAccounts = [
       {
         id: 'fund-1',
-        name: 'Technology' as const,
+        name: 'Tech Infrastructure',
         balance: 25000,
         allocated: 5000,
         percentage: 25,
         purpose: 'Technology fund',
+        allocationCategory: 'Technology' as const,
       },
     ];
 

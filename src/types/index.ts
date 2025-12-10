@@ -200,13 +200,16 @@ export interface FinancialRecord {
   userId: string;
 }
 
+export type AllocationCategory = "Technology" | "Growth" | "Team" | "Marketing" | "Emergency" | "Investments";
+
 export interface FundAccount {
   id: string;
-  name: "Technology" | "Growth" | "Team" | "Marketing" | "Emergency" | "Investments";
+  name: string;
   balance: number;
   allocated: number;
   percentage: number;
   purpose: string;
+  allocationCategory: AllocationCategory;
 }
 
 export interface BudgetAllocation {
@@ -271,5 +274,5 @@ export interface FilterState {
     deadlines: boolean;
   };
   teamMembers: string[];
-  viewMode: 'week' | 'month';
+  viewMode: 'day' | 'week' | 'month';
 }

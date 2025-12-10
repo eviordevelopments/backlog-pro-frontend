@@ -7,7 +7,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    include: ['tests/backlog-pro/**/*.test.ts', 'tests/backlog-pro/**/*.test.tsx', 'tests/auth/**/*.test.ts', 'tests/auth/**/*.test.tsx', 'tests/supabase/**/*.test.ts', 'tests/calendar-filters-views/**/*.test.ts', 'tests/calendar-filters-views/**/*.test.tsx', 'tests/financial-period-filter/**/*.test.ts', 'tests/financial-period-filter/**/*.test.tsx'],
+    include: ['tests/backlog-pro/**/*.test.ts', 'tests/backlog-pro/**/*.test.tsx', 'tests/auth/**/*.test.ts', 'tests/auth/**/*.test.tsx', 'tests/supabase/**/*.test.ts', 'tests/calendar-filters-views/**/*.test.ts', 'tests/calendar-filters-views/**/*.test.tsx', 'tests/financial-period-filter/**/*.test.ts', 'tests/financial-period-filter/**/*.test.tsx', 'tests/fund-allocation-selection/**/*.test.ts', 'tests/fund-allocation-selection/**/*.test.tsx'],
     setupFiles: ['./tests/backlog-pro/setup.ts', './tests/calendar-filters-views/setup.ts'],
     coverage: {
       provider: 'v8',

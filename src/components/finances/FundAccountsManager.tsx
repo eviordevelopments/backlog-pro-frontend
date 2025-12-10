@@ -5,9 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AlertCircle, Plus, Zap } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { FundAccount } from '@/types';
+import { FundAccount, AllocationCategory } from '@/types';
+import AddFundDialog from './AddFundDialog';
+import AllocationCategoryBadge from './AllocationCategoryBadge';
+import EditAllocationDialog from './EditAllocationDialog';
 
-const FUND_COLORS: Record<FundAccount['name'], string> = {
+const FUND_COLORS: Record<AllocationCategory, string> = {
   Technology: '#3b82f6',
   Growth: '#10b981',
   Team: '#f59e0b',
@@ -16,7 +19,7 @@ const FUND_COLORS: Record<FundAccount['name'], string> = {
   Investments: '#8b5cf6',
 };
 
-const FUND_ICONS: Record<FundAccount['name'], string> = {
+const FUND_ICONS: Record<AllocationCategory, string> = {
   Technology: '💻',
   Growth: '📈',
   Team: '👥',
@@ -25,7 +28,7 @@ const FUND_ICONS: Record<FundAccount['name'], string> = {
   Investments: '💰',
 };
 
-const DEFAULT_FUND_PERCENTAGES: Record<FundAccount['name'], number> = {
+const DEFAULT_FUND_PERCENTAGES: Record<AllocationCategory, number> = {
   Technology: 25,
   Growth: 20,
   Team: 30,
@@ -37,21 +40,35 @@ const DEFAULT_FUND_PERCENTAGES: Record<FundAccount['name'], number> = {
 export default function FundAccountsManager() {
   const { fundAccounts, addFundAccount, updateFundAccount, budgetAllocations, addBudgetAllocation } = useApp();
   const [totalBudget, setTotalBudget] = useState<string>('100000');
-  const [fundPercentages, setFundPercentages] = useState<Record<FundAccount['name'], number>>(
+  const [fundPercentages, setFundPercentages] = useState<Record<AllocationCategory, number>>(
     DEFAULT_FUND_PERCENTAGES
   );
   const [isDistributing, setIsDistributing] = useState(false);
+  const [isAddFundDialogOpen, setIsAddFundDialogOpen] = useState(false);
 
-  const handlePercentageChange = (fundName: FundAccount['name'], value: string) => {
+  const handlePercentageChange = (category: AllocationCategory, value: string) => {
     const numValue = parseFloat(value) || 0;
     setFundPercentages(prev => ({
       ...prev,
-      [fundName]: Math.max(0, Math.min(100, numValue)),
+      [category]: Math.max(0, Math.min(100, numValue)),
     }));
   };
 
   const getTotalPercentage = (): number => {
     return Object.values(fundPercentages).reduce((sum, pct) => sum + pct, 0);
+  };
+
+  const handleAddFund = (fundData: Omit<FundAccount, 'id'>) => {
+    try {
+      const newFund: FundAccount = {
+        ...fundData,
+        id: `fund-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      };
+      addFundAccount(newFund);
+      setIsAddFundDialogOpen(false);
+    } catch (error) {
+      console.error('Error adding fund:', error);
+    }
   };
 
   const handleDistributeBudget = () => {
@@ -76,7 +93,7 @@ export default function FundAccountsManager() {
       });
 
       // Create new fund accounts with distributed budget
-      const fundNames: FundAccount['name'][] = [
+      const categories: AllocationCategory[] = [
         'Technology',
         'Growth',
         'Team',
@@ -85,17 +102,18 @@ export default function FundAccountsManager() {
         'Investments',
       ];
 
-      fundNames.forEach(fundName => {
-        const percentage = fundPercentages[fundName];
+      categories.forEach(category => {
+        const percentage = fundPercentages[category];
         const allocatedAmount = (percentage / 100) * budget;
 
         const newFund: FundAccount = {
-          id: `fund-${fundName.toLowerCase()}-${Date.now()}`,
-          name: fundName,
+          id: `fund-${category.toLowerCase()}-${Date.now()}`,
+          name: `${category} Fund`,
           balance: allocatedAmount,
           allocated: 0,
           percentage,
-          purpose: `${fundName} fund for business operations`,
+          purpose: `${category} fund for business operations`,
+          allocationCategory: category,
         };
 
         addFundAccount(newFund);
@@ -163,11 +181,14 @@ export default function FundAccountsManager() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">Fund Accounts Manager</h2>
-        <p className="text-muted-foreground mt-1">
-          Manage and distribute budget across 6 fund accounts
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Fund Accounts Manager</h2>
+          <p className="text-muted-foreground mt-1">
+            Manage and distribute budget across 6 fund accounts
+          </p>
+        </div>
+        <AddFundDialog onSubmit={handleAddFund} />
       </div>
 
       {/* Budget Distribution Setup */}
@@ -206,11 +227,11 @@ export default function FundAccountsManager() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {(Object.keys(DEFAULT_FUND_PERCENTAGES) as FundAccount['name'][]).map(fundName => (
-                <div key={fundName} className="space-y-2">
+              {(Object.keys(DEFAULT_FUND_PERCENTAGES) as AllocationCategory[]).map(category => (
+                <div key={category} className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-lg">{FUND_ICONS[fundName]}</span>
-                    <label className="text-sm font-medium flex-1">{fundName}</label>
+                    <span className="text-lg">{FUND_ICONS[category]}</span>
+                    <label className="text-sm font-medium flex-1">{category}</label>
                   </div>
                   <div className="flex gap-2">
                     <Input
@@ -218,14 +239,14 @@ export default function FundAccountsManager() {
                       min="0"
                       max="100"
                       step="0.1"
-                      value={fundPercentages[fundName]}
-                      onChange={(e) => handlePercentageChange(fundName, e.target.value)}
+                      value={fundPercentages[category]}
+                      onChange={(e) => handlePercentageChange(category, e.target.value)}
                       className="flex-1"
                     />
                     <span className="text-sm text-muted-foreground py-2 w-12 text-right">%</span>
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    ${((fundPercentages[fundName] / 100) * parseFloat(totalBudget || '0')).toLocaleString(undefined, {
+                    ${((fundPercentages[category] / 100) * parseFloat(totalBudget || '0')).toLocaleString(undefined, {
                       maximumFractionDigits: 0,
                     })}
                   </div>
@@ -270,7 +291,7 @@ export default function FundAccountsManager() {
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="text-2xl">{FUND_ICONS[fund.name]}</span>
+                        <span className="text-2xl">{FUND_ICONS[fund.allocationCategory]}</span>
                         <div>
                           <CardTitle className="text-base">{fund.name}</CardTitle>
                           <p className="text-xs text-muted-foreground">{fund.percentage}% allocation</p>
@@ -282,6 +303,12 @@ export default function FundAccountsManager() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    {/* Allocation Category Badge */}
+                    <div className="flex items-center justify-between">
+                      <AllocationCategoryBadge category={fund.allocationCategory} />
+                      <EditAllocationDialog fund={fund} onUpdate={updateFundAccount} />
+                    </div>
+
                     {/* Balance */}
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Total Balance</p>

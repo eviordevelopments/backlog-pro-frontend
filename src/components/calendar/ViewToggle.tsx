@@ -1,14 +1,24 @@
 import { Button } from '@/components/ui/button';
-import { Calendar, CalendarDays } from 'lucide-react';
+import { Calendar, CalendarDays, Clock } from 'lucide-react';
 
 interface ViewToggleProps {
-  currentView: 'week' | 'month';
-  onViewChange: (view: 'week' | 'month') => void;
+  currentView: 'day' | 'week' | 'month';
+  onViewChange: (view: 'day' | 'week' | 'month') => void;
 }
 
 export default function ViewToggle({ currentView, onViewChange }: ViewToggleProps) {
   return (
     <div className="flex gap-2 bg-muted/50 p-1 rounded-lg w-fit">
+      <Button
+        variant={currentView === 'day' ? 'default' : 'ghost'}
+        size="sm"
+        onClick={() => onViewChange('day')}
+        className="gap-2"
+        aria-pressed={currentView === 'day'}
+      >
+        <Clock className="h-4 w-4" />
+        Day
+      </Button>
       <Button
         variant={currentView === 'week' ? 'default' : 'ghost'}
         size="sm"
