@@ -1,4 +1,4 @@
-const GRAPHQL_ENDPOINT = 'https://backlog-pro-backend.onrender.com/graphql';
+import { API_CONFIG } from '@/config/api';
 
 const REQUEST_PASSWORD_RESET_MUTATION = `
   mutation RequestPasswordReset($input: RequestPasswordResetInput!) {
@@ -22,7 +22,7 @@ export async function requestPasswordReset(
   input: RequestPasswordResetInput
 ): Promise<RequestPasswordResetResponse> {
   try {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

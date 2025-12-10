@@ -1,4 +1,4 @@
-const GRAPHQL_ENDPOINT = 'https://backlog-pro-backend.onrender.com/graphql';
+import { API_CONFIG } from '@/config/api';
 
 export interface WorkedHoursResponseDto {
   userId: string;
@@ -29,7 +29,7 @@ export async function getWorkedHours(
   projectId?: string
 ): Promise<WorkedHoursResponseDto> {
   try {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -1,4 +1,4 @@
-const GRAPHQL_ENDPOINT = 'https://backlog-pro-backend.onrender.com/graphql';
+import { API_CONFIG } from '@/config/api';
 
 const CREATE_SPRINT_MUTATION = `
   mutation CreateSprint($input: CreateSprintDto!) {
@@ -81,7 +81,7 @@ export async function createSprint(
   input: CreateSprintDto
 ): Promise<Sprint> {
   try {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -138,7 +138,7 @@ export async function listSprints(
       return [];
     }
 
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -189,7 +189,7 @@ export async function getSprintMetrics(
   sprintId: string
 ): Promise<SprintMetrics> {
   try {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

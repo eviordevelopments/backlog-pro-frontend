@@ -1,4 +1,4 @@
-const GRAPHQL_ENDPOINT = 'https://backlog-pro-backend.onrender.com/graphql';
+import { API_CONFIG } from '@/config/api';
 
 const LIST_PROJECTS_QUERY = `
   query ListProjects {
@@ -52,7 +52,7 @@ export async function updateProject(
   input: UpdateProjectDto
 ): Promise<any> {
   try {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -88,7 +88,7 @@ export async function updateProject(
 
 export async function listProjects(token: string): Promise<Project[]> {
   try {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -120,7 +120,7 @@ export async function createProject(
   input: CreateProjectDto
 ): Promise<Project> {
   try {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -165,7 +165,7 @@ const GET_PROJECT_QUERY = `
 
 export async function getProject(token: string, projectId: string): Promise<Project> {
   try {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -207,7 +207,7 @@ const DELETE_PROJECT_MUTATION = `
 
 export async function deleteProject(token: string, projectId: string): Promise<void> {
   try {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

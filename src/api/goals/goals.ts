@@ -1,4 +1,4 @@
-const GRAPHQL_ENDPOINT = 'https://backlog-pro-backend.onrender.com/graphql';
+import { API_CONFIG } from '@/config/api';
 
 export interface Goal {
   id: string;
@@ -93,7 +93,7 @@ const GET_USER_GOALS_QUERY = `
 
 export async function createGoal(token: string, input: CreateGoalDto): Promise<Goal> {
   try {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -131,7 +131,7 @@ export async function updateGoalProgress(
   currentValue: number
 ): Promise<Goal> {
   try {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -167,7 +167,7 @@ export async function updateGoalProgress(
 
 export async function getUserGoals(token: string, ownerId: string): Promise<Goal[]> {
   try {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

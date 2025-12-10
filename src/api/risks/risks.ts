@@ -1,4 +1,4 @@
-const GRAPHQL_ENDPOINT = 'https://backlog-pro-backend.onrender.com/graphql';
+import { API_CONFIG } from '@/config/api';
 
 export interface Risk {
   id: string;
@@ -64,7 +64,7 @@ const GET_PROJECT_RISKS_QUERY = `
 
 export async function createRisk(token: string, input: CreateRiskDto): Promise<Risk> {
   try {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -98,7 +98,7 @@ export async function createRisk(token: string, input: CreateRiskDto): Promise<R
 
 export async function getProjectRisks(token: string, projectId: string): Promise<Risk[]> {
   try {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

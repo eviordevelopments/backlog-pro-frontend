@@ -1,4 +1,4 @@
-const GRAPHQL_ENDPOINT = 'https://backlog-pro-backend.onrender.com/graphql';
+import { API_CONFIG } from '@/config/api';
 
 const SIGNUP_MUTATION = `
   mutation Signup($input: SignupInput!) {
@@ -26,7 +26,7 @@ export interface SignupResponse {
 
 export async function signup(input: SignupInput): Promise<SignupResponse> {
   try {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

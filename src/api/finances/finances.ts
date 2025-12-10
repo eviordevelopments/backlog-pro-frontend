@@ -1,6 +1,5 @@
 import { FinancialRecord, BudgetAllocation, FundAccount, FinancialMetrics } from '@/types';
-
-const GRAPHQL_ENDPOINT = 'https://backlog-pro-backend.onrender.com/graphql';
+import { API_CONFIG } from '@/config/api';
 
 export interface Transaction {
   id: string;
@@ -106,7 +105,7 @@ export async function createTransaction(
   input: CreateTransactionDto
 ): Promise<Transaction> {
   try {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -150,7 +149,7 @@ export async function generateFinancialReport(
       throw new Error('Project ID is required');
     }
 
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -192,7 +191,7 @@ export async function calculateSalaries(
       throw new Error('Project ID is required');
     }
 
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -1,4 +1,4 @@
-const GRAPHQL_ENDPOINT = 'https://backlog-pro-backend.onrender.com/graphql';
+import { API_CONFIG } from '@/config/api';
 
 export interface Meeting {
   id: string;
@@ -70,7 +70,7 @@ const GET_PROJECT_MEETINGS_QUERY = `
 
 export async function createMeeting(token: string, input: CreateMeetingDto): Promise<Meeting> {
   try {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -104,7 +104,7 @@ export async function createMeeting(token: string, input: CreateMeetingDto): Pro
 
 export async function getProjectMeetings(token: string, projectId: string): Promise<Meeting[]> {
   try {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
