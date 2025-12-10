@@ -7,23 +7,6 @@
 
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 import * as fc from 'fast-check';
-import { supabase } from '@/integrations/supabase/client';
-
-// Mock Supabase
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    auth: {
-      signInWithPassword: vi.fn(),
-      signUp: vi.fn(),
-      signOut: vi.fn(),
-      getSession: vi.fn(),
-    },
-    from: vi.fn(() => ({
-      insert: vi.fn(() => ({ error: null })),
-      select: vi.fn(() => ({ data: [], error: null })),
-    })),
-  },
-}));
 
 // Generators for authentication data
 const validEmailArb = fc.emailAddress();
@@ -60,11 +43,13 @@ describe('Authentication Flow Properties', () => {
   test('Property 4: Invalid credentials rejected', async () => {
     await fc.assert(
       fc.asyncProperty(validEmailArb, invalidPasswordArb, async (email, password) => {
-        // Mock Supabase to return error for invalid credentials
-        vi.mocked(supabase.auth.signInWithPassword).mockResolvedValueOnce({
-          data: { user: null, session: null },
-          error: { message: 'Invalid login credentials', name: 'AuthError', status: 400 },
-        } as any);
+        // Mock failed login via API
+        vi.stubGlobal('fetch', vi.fn(() =>
+          Promise.resolve({
+            ok: false,
+            json: () => Promise.resolve({ error: 'Invalid login credentials' }),
+          } as Response)
+        ));
 
         const { AuthProvider, useAuth } = await import('@/context/AuthContext');
         const { renderHook, waitFor } = await import('@testing-library/react');
@@ -119,23 +104,6 @@ describe('Authentication Flow Properties', () => {
         };
         localStorage.setItem('auth_session', JSON.stringify(session));
 
-        // Mock Supabase to return valid session
-        vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({
-          data: {
-            session: {
-              user: {
-                id: 'test-user-id',
-                email: user.email,
-                user_metadata: { name: user.name },
-                created_at: new Date().toISOString(),
-              } as any,
-              access_token: 'valid-token',
-              expires_at: Math.floor((Date.now() + 3600000) / 1000),
-            } as any,
-          },
-          error: null,
-        } as any);
-
         const { AuthProvider, useAuth } = await import('@/context/AuthContext');
         const { renderHook, waitFor } = await import('@testing-library/react');
         const { default: React } = await import('react');
@@ -181,12 +149,6 @@ describe('Authentication Flow Properties', () => {
         };
         localStorage.setItem('auth_session', JSON.stringify(expiredSession));
 
-        // Mock Supabase to return no session
-        vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({
-          data: { session: null },
-          error: null,
-        } as any);
-
         const { AuthProvider, useAuth } = await import('@/context/AuthContext');
         const { renderHook, waitFor } = await import('@testing-library/react');
         const { default: React } = await import('react');
@@ -222,22 +184,18 @@ describe('Authentication Flow Properties', () => {
   test('Property 3: Dashboard redirect after authentication', async () => {
     await fc.assert(
       fc.asyncProperty(validUserArb, async (user) => {
-        // Mock successful login
-        vi.mocked(supabase.auth.signInWithPassword).mockResolvedValueOnce({
-          data: {
-            user: {
-              id: 'test-user-id',
+        // Mock successful login via API
+        vi.stubGlobal('fetch', vi.fn(() =>
+          Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              userId: 'test-user-id',
               email: user.email,
-              user_metadata: { name: user.name },
-              created_at: new Date().toISOString(),
-            } as any,
-            session: {
-              access_token: 'valid-token',
-              expires_at: Math.floor((Date.now() + 3600000) / 1000),
-            } as any,
-          },
-          error: null,
-        } as any);
+              name: user.name,
+              token: 'valid-token',
+            }),
+          } as Response)
+        ));
 
         const { AuthProvider, useAuth } = await import('@/context/AuthContext');
         const { renderHook, waitFor } = await import('@testing-library/react');

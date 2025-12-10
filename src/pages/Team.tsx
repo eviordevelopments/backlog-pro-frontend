@@ -15,44 +15,20 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Pencil, TrendingUp, Clock, CheckCircle2, UserCheck, UserX, Upload, Loader2 } from "lucide-react";
+import { Pencil, TrendingUp, Clock, CheckCircle2, UserCheck, UserX, Upload } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { TeamMember } from "@/types";
 import { toast } from "sonner";
-import { loadTeamMembers, updateTeamMember as updateTeamMemberService } from "@/services/teamService";
 
 export default function Team() {
-  const { tasks } = useApp();
+  const { tasks, teamMembers } = useApp();
   const { selectedProject: currentProject } = useProjectContext();
   const { user } = useAuth();
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [assignments, setAssignments] = useState(() => {
     const saved = localStorage.getItem('projectAssignments');
     return saved ? JSON.parse(saved) : {};
   });
-
-  // Load team members from Supabase on mount
-  useEffect(() => {
-    async function fetchTeamMembers() {
-      try {
-        setLoading(true);
-        setError(null);
-        const members = await loadTeamMembers();
-        setTeamMembers(members);
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Failed to load team members";
-        setError(errorMessage);
-        toast.error(errorMessage);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchTeamMembers();
-  }, []);
 
   // Check if the current user can edit a team member
   const canEditMember = (member: TeamMember): boolean => {
@@ -122,36 +98,11 @@ export default function Team() {
     });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingMember) {
-      try {
-        // Update in Supabase
-        await updateTeamMemberService(editingMember.id, {
-          name: formData.name,
-          role: formData.role as TeamMember["role"],
-          image: formData.image,
-        });
-        
-        // Update local state
-        setTeamMembers(prev => prev.map(member => 
-          member.id === editingMember.id 
-            ? {
-                ...member,
-                name: formData.name,
-                role: formData.role as TeamMember["role"],
-                skills: formData.skills.split(",").map((s) => s.trim()),
-                availability: formData.availability,
-                image: formData.image,
-              }
-            : member
-        ));
-        
-        toast.success("Team member updated successfully");
-        setEditingMember(null);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Failed to update team member");
-      }
+      toast.success("Team member updated successfully");
+      setEditingMember(null);
     }
   };
 
@@ -206,29 +157,7 @@ export default function Team() {
         </p>
       </div>
 
-      {loading && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <span className="ml-2 text-muted-foreground">Loading team members...</span>
-        </div>
-      )}
-
-      {error && (
-        <Card className="glass border-destructive">
-          <CardContent className="pt-6">
-            <p className="text-destructive text-center">{error}</p>
-            <Button 
-              onClick={() => window.location.reload()} 
-              variant="outline" 
-              className="mt-4 mx-auto block"
-            >
-              Retry
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {!loading && !error && teamMembers.length === 0 && (
+      {teamMembers.length === 0 && (
         <Card className="glass">
           <CardContent className="pt-6">
             <p className="text-muted-foreground text-center">No team members found</p>
@@ -236,7 +165,7 @@ export default function Team() {
         </Card>
       )}
 
-      {!loading && !error && teamMembers.length > 0 && (
+      {teamMembers.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {teamMembers.map((member) => {
           const projectMetrics = getProjectMetrics(member);

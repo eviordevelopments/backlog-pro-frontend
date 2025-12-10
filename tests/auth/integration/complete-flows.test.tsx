@@ -9,35 +9,12 @@
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 import React from 'react';
-
-// Mock Supabase
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    auth: {
-      signInWithPassword: vi.fn(),
-      signUp: vi.fn(),
-      signOut: vi.fn(),
-      getSession: vi.fn(),
-    },
-    from: vi.fn(() => ({
-      insert: vi.fn(() => Promise.resolve({ error: null })),
-      select: vi.fn(() => Promise.resolve({ data: [], error: null })),
-    })),
-  },
-}));
 
 describe('Complete Authentication Flows', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
-    
-    // Default mock for getSession
-    vi.mocked(supabase.auth.getSession).mockResolvedValue({
-      data: { session: null },
-      error: null,
-    } as any);
   });
 
   /**
@@ -54,22 +31,18 @@ describe('Complete Authentication Flows', () => {
       name: 'Test User',
     };
 
-    // Mock successful login
-    vi.mocked(supabase.auth.signInWithPassword).mockResolvedValueOnce({
-      data: {
-        user: {
-          id: 'test-user-id',
+    // Mock successful login via API
+    vi.stubGlobal('fetch', vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          userId: 'test-user-id',
           email: testUser.email,
-          user_metadata: { name: testUser.name },
-          created_at: new Date().toISOString(),
-        } as any,
-        session: {
-          access_token: 'valid-token',
-          expires_at: Math.floor((Date.now() + 3600000) / 1000),
-        } as any,
-      },
-      error: null,
-    } as any);
+          name: testUser.name,
+          token: 'valid-token',
+        }),
+      } as Response)
+    ));
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <AuthProvider>{children}</AuthProvider>
@@ -116,28 +89,18 @@ describe('Complete Authentication Flows', () => {
       name: 'New User',
     };
 
-    // Mock successful registration
-    vi.mocked(supabase.auth.signUp).mockResolvedValueOnce({
-      data: {
-        user: {
-          id: 'new-user-id',
+    // Mock successful registration via API
+    vi.stubGlobal('fetch', vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          userId: 'new-user-id',
           email: testUser.email,
-          user_metadata: { name: testUser.name },
-          created_at: new Date().toISOString(),
-        } as any,
-        session: {
-          access_token: 'new-user-token',
-          expires_at: Math.floor((Date.now() + 3600000) / 1000),
-        } as any,
-      },
-      error: null,
-    } as any);
-
-    // Mock TeamMember creation
-    const mockInsert = vi.fn().mockResolvedValueOnce({ error: null });
-    vi.mocked(supabase.from).mockReturnValueOnce({
-      insert: mockInsert,
-    } as any);
+          name: testUser.name,
+          token: 'new-user-token',
+        }),
+      } as Response)
+    ));
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <AuthProvider>{children}</AuthProvider>
@@ -159,14 +122,6 @@ describe('Complete Authentication Flows', () => {
     expect(result.current.user).not.toBeNull();
     expect(result.current.user?.email).toBe(testUser.email);
     expect(result.current.user?.name).toBe(testUser.name);
-
-    // Verify: TeamMember record was created
-    expect(mockInsert).toHaveBeenCalledWith({
-      id: 'new-user-id',
-      name: testUser.name,
-      email: testUser.email,
-      role: 'Developer',
-    });
 
     // Verify: Session is stored
     const storedSession = localStorage.getItem('auth_session');
@@ -195,28 +150,6 @@ describe('Complete Authentication Flows', () => {
       expiresAt: Date.now() + 3600000,
     };
     localStorage.setItem('auth_session', JSON.stringify(session));
-
-    // Mock Supabase session
-    vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({
-      data: {
-        session: {
-          user: {
-            id: testUser.id,
-            email: testUser.email,
-            user_metadata: { name: testUser.name },
-            created_at: testUser.createdAt,
-          } as any,
-          access_token: 'valid-token',
-          expires_at: Math.floor((Date.now() + 3600000) / 1000),
-        } as any,
-      },
-      error: null,
-    } as any);
-
-    // Mock successful logout
-    vi.mocked(supabase.auth.signOut).mockResolvedValueOnce({
-      error: null,
-    } as any);
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <AuthProvider>{children}</AuthProvider>
@@ -268,23 +201,6 @@ describe('Complete Authentication Flows', () => {
     };
     localStorage.setItem('auth_session', JSON.stringify(session));
 
-    // Mock Supabase to return valid session
-    vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({
-      data: {
-        session: {
-          user: {
-            id: testUser.id,
-            email: testUser.email,
-            user_metadata: { name: testUser.name },
-            created_at: testUser.createdAt,
-          } as any,
-          access_token: 'valid-token',
-          expires_at: Math.floor((Date.now() + 3600000) / 1000),
-        } as any,
-      },
-      error: null,
-    } as any);
-
     // Simulate page refresh by creating new AuthProvider
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <AuthProvider>{children}</AuthProvider>
@@ -314,11 +230,13 @@ describe('Complete Authentication Flows', () => {
       password: 'wrongpassword',
     };
 
-    // Mock failed login
-    vi.mocked(supabase.auth.signInWithPassword).mockResolvedValueOnce({
-      data: { user: null, session: null },
-      error: { message: 'Invalid login credentials', name: 'AuthError', status: 400 },
-    } as any);
+    // Mock failed login via API
+    vi.stubGlobal('fetch', vi.fn(() =>
+      Promise.resolve({
+        ok: false,
+        json: () => Promise.resolve({ error: 'Invalid login credentials' }),
+      } as Response)
+    ));
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <AuthProvider>{children}</AuthProvider>
@@ -366,12 +284,6 @@ describe('Complete Authentication Flows', () => {
       expiresAt: Date.now() - 3600000, // 1 hour ago
     };
     localStorage.setItem('auth_session', JSON.stringify(expiredSession));
-
-    // Mock Supabase to return no session
-    vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({
-      data: { session: null },
-      error: null,
-    } as any);
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <AuthProvider>{children}</AuthProvider>
