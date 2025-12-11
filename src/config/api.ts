@@ -4,8 +4,8 @@
  */
 
 export const API_CONFIG = {
-  BACKEND_URL: import.meta.env.BACKEND_URL || 'http://localhost:3001',
-  GRAPHQL_ENDPOINT: `${import.meta.env.BACKEND_URL || 'http://localhost:3001'}/graphql`,
+  BACKEND_URL: import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001',
+  GRAPHQL_ENDPOINT: `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/graphql`,
 };
 
 export default API_CONFIG;
