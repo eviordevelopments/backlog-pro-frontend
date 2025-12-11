@@ -76,6 +76,23 @@ export default function ProjectCalendar() {
       }
     });
 
+    // Add meetings from localStorage
+    const savedMeetings = localStorage.getItem('meetings');
+    if (savedMeetings) {
+      const meetings = JSON.parse(savedMeetings);
+      meetings.forEach((meeting: any) => {
+        if (meeting.dateTime && (meeting.status === 'scheduled' || meeting.status === 'in_progress')) {
+          calendarEvents.push({
+            id: `meeting-${meeting.id}`,
+            title: meeting.title,
+            date: new Date(meeting.dateTime),
+            type: 'meeting',
+            color: '#ec4899',
+          });
+        }
+      });
+    }
+
     // Add sample events for demonstration if no events exist
     if (calendarEvents.length === 0) {
       const today = new Date();

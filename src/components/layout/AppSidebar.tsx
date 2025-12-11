@@ -12,10 +12,10 @@ import {
   Target,
   LogOut,
   User,
-  Video,
   Briefcase,
   ChevronLeft,
   ChevronRight,
+  VideoIcon,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/context/AuthContext";
@@ -52,9 +52,9 @@ const menuItems = [
   { title: "Sprints", url: "/sprints", icon: CalendarDays },
   { title: "User Stories", url: "/stories", icon: FileText },
   { title: "Calendar", url: "/calendar", icon: CalendarDays },
+  { title: "Meetings", url: "/meetings", icon: VideoIcon },
   { title: "Team", url: "/team", icon: Users },
   { title: "Clients", url: "/clients", icon: Users },
-  { title: "Video Calls", url: "/video-call", icon: Video },
   { title: "Risk Matrix", url: "/risks", icon: AlertTriangle },
   { title: "Finances", url: "/finances", icon: Wallet },
   { title: "Goals", url: "/goals", icon: Target },

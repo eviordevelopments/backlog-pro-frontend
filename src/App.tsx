@@ -24,9 +24,9 @@ import Team from "./pages/Team";
 import Risks from "./pages/Risks";
 import Finances from "./pages/Finances";
 import Clients from "./pages/Clients";
-import VideoCall from "./pages/VideoCall";
 import Goals from "./pages/Goals";
 import Calendar from "./pages/Calendar";
+import Meetings from "./pages/Meetings";
 import DevOps from "./pages/DevOps";
 import NotFound from "./pages/NotFound";
 
@@ -62,9 +62,9 @@ const AppRoutes = () => {
           <Route path="/risks" element={<Risks />} />
           <Route path="/finances" element={<Finances />} />
           <Route path="/clients" element={<Clients />} />
-          <Route path="/video-call" element={<VideoCall />} />
           <Route path="/goals" element={<Goals />} />
           <Route path="/calendar" element={<Calendar />} />
+          <Route path="/meetings" element={<Meetings />} />
           <Route path="/devops" element={<DevOps />} />
         </Route>
         
