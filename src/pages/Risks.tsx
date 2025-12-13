@@ -14,23 +14,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Plus, AlertTriangle } from "lucide-react";
+import { Plus, AlertTriangle, Edit2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { createRisk, getProjectRisks, Risk, CreateRiskDto } from "@/api/risks/risks";
+import { createRisk, getProjectRisks, updateRisk, deleteRisk, Risk, CreateRiskDto } from "@/api/risks/risks";
 
 export default function Risks() {
   const { user } = useAuth();
   const { selectedProject: currentProject } = useProjectContext();
   const [risks, setRisks] = useState<Risk[]>([]);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingRisk, setEditingRisk] = useState<Risk | null>(null);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    probability: "medium" as const,
-    impact: "medium" as const,
+    probability: "medium" as 'low' | 'medium' | 'high' | 'critical',
+    impact: "medium" as 'low' | 'medium' | 'high' | 'critical',
     mitigationStrategy: "",
     category: "technical",
+    status: "open" as 'open' | 'mitigated' | 'closed',
   });
 
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
@@ -105,23 +107,42 @@ export default function Risks() {
     try {
       setLoading(true);
 
-      const input: CreateRiskDto = {
-        title: formData.title,
-        description: formData.description,
-        category: formData.category,
-        probability: formData.probability,
-        impact: formData.impact,
-        projectId: currentProject.id,
-        responsibleId: user.id,
-        mitigationStrategy: formData.mitigationStrategy,
-      };
+      if (editingRisk) {
+        // Update existing risk
+        const updated = await updateRisk(token, editingRisk.id, {
+          title: formData.title,
+          description: formData.description,
+          category: formData.category,
+          probability: formData.probability,
+          impact: formData.impact,
+          status: formData.status,
+          mitigationStrategy: formData.mitigationStrategy,
+        });
+        
+        const updatedRisks = risks.map(r => r.id === editingRisk.id ? { ...r, ...updated } : r);
+        setRisks(updatedRisks);
+        localStorage.setItem('projectRisks', JSON.stringify(updatedRisks));
+        toast.success("Risk updated successfully");
+      } else {
+        // Create new risk
+        const input: CreateRiskDto = {
+          title: formData.title,
+          description: formData.description,
+          category: formData.category,
+          probability: formData.probability,
+          impact: formData.impact,
+          projectId: currentProject.id,
+          responsibleId: user.id,
+          mitigationStrategy: formData.mitigationStrategy,
+        };
 
-      const newRisk = await createRisk(token, input);
-      toast.success("Risk created successfully");
+        const newRisk = await createRisk(token, input);
+        toast.success("Risk created successfully");
 
-      // Add to local state
-      setRisks([...risks, newRisk]);
-      localStorage.setItem('projectRisks', JSON.stringify([...risks, newRisk]));
+        // Add to local state
+        setRisks([...risks, newRisk]);
+        localStorage.setItem('projectRisks', JSON.stringify([...risks, newRisk]));
+      }
 
       // Clear form
       setFormData({
@@ -131,12 +152,54 @@ export default function Risks() {
         impact: "medium",
         mitigationStrategy: "",
         category: "technical",
+        status: "open",
       });
       setValidationErrors({});
+      setEditingRisk(null);
       setIsCreateOpen(false);
     } catch (error) {
-      console.error('Failed to create risk:', error);
-      toast.error(error instanceof Error ? error.message : "Failed to create risk");
+      console.error('Failed to save risk:', error);
+      toast.error(error instanceof Error ? error.message : "Failed to save risk");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEdit = (risk: Risk) => {
+    setEditingRisk(risk);
+    setFormData({
+      title: risk.title,
+      description: risk.description || "",
+      probability: risk.probability,
+      impact: risk.impact,
+      mitigationStrategy: risk.mitigationStrategy || "",
+      category: risk.category,
+      status: risk.status,
+    });
+    setIsCreateOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    const token = getToken();
+    if (!token) {
+      toast.error('Not authenticated');
+      return;
+    }
+
+    if (!confirm('Are you sure you want to delete this risk?')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await deleteRisk(token, id);
+      const updatedRisks = risks.filter(r => r.id !== id);
+      setRisks(updatedRisks);
+      localStorage.setItem('projectRisks', JSON.stringify(updatedRisks));
+      toast.success("Risk deleted successfully");
+    } catch (error) {
+      console.error('Failed to delete risk:', error);
+      toast.error(error instanceof Error ? error.message : "Failed to delete risk");
     } finally {
       setLoading(false);
     }
@@ -169,16 +232,30 @@ export default function Risks() {
             Identify and manage project risks
           </p>
         </div>
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <Dialog open={isCreateOpen} onOpenChange={(open) => {
+          setIsCreateOpen(open);
+          if (!open) {
+            setEditingRisk(null);
+            setFormData({
+              title: "",
+              description: "",
+              probability: "medium",
+              impact: "medium",
+              mitigationStrategy: "",
+              category: "technical",
+              status: "open",
+            });
+          }
+        }}>
           <DialogTrigger asChild>
             <Button className="gap-2">
               <Plus className="h-4 w-4" />
               Add Risk
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Add New Risk</DialogTitle>
+              <DialogTitle>{editingRisk ? 'Edit Risk' : 'Add New Risk'}</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
@@ -266,6 +343,26 @@ export default function Risks() {
                 </div>
               </div>
 
+              {editingRisk && (
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <select
+                    className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                    value={formData.status}
+                    onChange={(e) => {
+                      setFormData({
+                        ...formData,
+                        status: e.target.value as 'open' | 'mitigated' | 'closed',
+                      });
+                    }}
+                  >
+                    <option value="open">Open</option>
+                    <option value="mitigated">Mitigated</option>
+                    <option value="closed">Closed</option>
+                  </select>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label>Mitigation Strategy</Label>
                 <Textarea
@@ -279,7 +376,7 @@ export default function Risks() {
               </div>
 
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? 'Creating...' : 'Add Risk'}
+                {loading ? 'Saving...' : editingRisk ? 'Update Risk' : 'Add Risk'}
               </Button>
             </form>
           </DialogContent>
@@ -377,6 +474,24 @@ export default function Risks() {
                     <p className="text-sm text-muted-foreground mt-2">
                       {risk.description}
                     </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleEdit(risk)}
+                      disabled={loading}
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDelete(risk.id)}
+                      disabled={loading}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               </CardHeader>

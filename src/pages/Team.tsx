@@ -22,13 +22,20 @@ import { toast } from "sonner";
 
 export default function Team() {
   const { tasks, teamMembers } = useApp();
-  const { selectedProject: currentProject } = useProjectContext();
+  const { selectedProject: currentProject, projectMembers, getProjectMembersDetails, addMemberToProject } = useProjectContext();
   const { user } = useAuth();
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
-  const [assignments, setAssignments] = useState(() => {
-    const saved = localStorage.getItem('projectAssignments');
-    return saved ? JSON.parse(saved) : {};
-  });
+  const [loadingMembers, setLoadingMembers] = useState(false);
+
+  // Load project members when project changes
+  useEffect(() => {
+    if (currentProject?.id) {
+      setLoadingMembers(true);
+      getProjectMembersDetails(currentProject.id)
+        .catch(err => console.error("Failed to load project members:", err))
+        .finally(() => setLoadingMembers(false));
+    }
+  }, [currentProject?.id]);
 
   // Check if the current user can edit a team member
   const canEditMember = (member: TeamMember): boolean => {
@@ -37,46 +44,35 @@ export default function Team() {
     return member.name.toLowerCase() === user.name.toLowerCase();
   };
   
-  // Get project assignments from state
-  const getProjectAssignments = () => {
-    return assignments;
-  };
-  
   // Check if a member is assigned to the current project
   const isMemberAssigned = (memberId: string) => {
     if (!currentProject) return true; // Show all if no project selected
-    const assignments = getProjectAssignments();
-    const projectAssignments = assignments[currentProject.id] || [];
-    // If no assignments exist for this project, assume all members are assigned
-    if (projectAssignments.length === 0) return true;
-    return projectAssignments.includes(memberId);
+    // Check if member exists in projectMembers
+    return projectMembers.some(pm => pm.userId === memberId);
   };
   
   // Toggle member assignment to current project
-  const toggleMemberAssignment = (memberId: string) => {
+  const toggleMemberAssignment = async (member: TeamMember) => {
     if (!currentProject) return;
     
-    const currentAssignments = { ...assignments };
-    const projectAssignments = currentAssignments[currentProject.id] || [];
-    
-    // If no assignments exist yet, initialize with all members except the one being toggled
-    if (projectAssignments.length === 0) {
-      currentAssignments[currentProject.id] = teamMembers
-        .filter(m => m.id !== memberId)
-        .map(m => m.id);
-    } else {
-      // Toggle the member
-      if (projectAssignments.includes(memberId)) {
-        currentAssignments[currentProject.id] = projectAssignments.filter((id: string) => id !== memberId);
+    try {
+      const isCurrentlyAssigned = isMemberAssigned(member.id);
+      
+      if (!isCurrentlyAssigned) {
+        // Add member to project
+        await addMemberToProject(currentProject.id, {
+          userId: member.id,
+          role: member.role.toLowerCase().replace(" ", "_")
+        });
+        toast.success(`${member.name} added to ${currentProject.name}`);
       } else {
-        currentAssignments[currentProject.id] = [...projectAssignments, memberId];
+        // TODO: Implement removeProjectMember when backend endpoint is available
+        toast.info("Remove functionality coming soon");
       }
+    } catch (err) {
+      console.error("Failed to update assignment:", err);
+      toast.error("Failed to update project assignment");
     }
-    
-    // Update state and localStorage
-    setAssignments(currentAssignments);
-    localStorage.setItem('projectAssignments', JSON.stringify(currentAssignments));
-    toast.success("Project assignment updated");
   };
 
   const [formData, setFormData] = useState({
@@ -194,7 +190,8 @@ export default function Team() {
                           <div className="flex items-center gap-2">
                             <Switch
                               checked={isMemberAssigned(member.id)}
-                              onCheckedChange={() => toggleMemberAssignment(member.id)}
+                              onCheckedChange={() => toggleMemberAssignment(member)}
+                              disabled={loadingMembers}
                             />
                             {isMemberAssigned(member.id) ? (
                               <UserCheck className="h-4 w-4 text-success" />

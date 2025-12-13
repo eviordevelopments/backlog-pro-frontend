@@ -101,13 +101,20 @@ export default function Profile() {
         setWorkedHours(data);
       } catch (error) {
         console.error('Failed to load worked hours:', error);
+        // Set default values on error
+        setWorkedHours({
+          userId: user?.id || '',
+          totalHours: 0,
+          projectId: currentProject?.id,
+          breakdown: [],
+        });
       } finally {
         setLoadingHours(false);
       }
     };
 
     loadWorkedHours();
-  }, [currentProject]);
+  }, [currentProject?.id, user?.id]);
 
   const onSubmit = async (data: ProfileFormValues) => {
     try {
@@ -258,7 +265,9 @@ export default function Profile() {
               <Clock className="h-4 w-4" />
               Worked Hours
             </CardTitle>
-            <CardDescription>Your time tracking information</CardDescription>
+            <CardDescription>
+              {currentProject ? `Time tracking for ${currentProject.name}` : 'Your time tracking information'}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {loadingHours ? (
@@ -267,31 +276,43 @@ export default function Profile() {
               </div>
             ) : (
               <>
-                <div>
-                  <label className="text-sm font-medium">Total Hours</label>
-                  <p className="text-2xl font-bold text-primary">
-                    {workedHours?.totalHours.toFixed(1) || '0'}h
+                <div className="bg-gradient-to-br from-primary/10 to-accent/10 rounded-lg p-4">
+                  <label className="text-sm font-medium text-muted-foreground">Total Hours</label>
+                  <p className="text-3xl font-bold text-primary mt-1">
+                    {workedHours?.totalHours.toFixed(1) || '0'}
+                    <span className="text-lg ml-1">hours</span>
                   </p>
                 </div>
-                {currentProject && (
-                  <div>
-                    <label className="text-sm font-medium">Project</label>
-                    <p className="text-sm text-muted-foreground">{currentProject.name}</p>
+                
+                {!currentProject && (
+                  <div className="text-sm text-muted-foreground italic p-3 bg-muted rounded">
+                    Select a project to view project-specific hours
                   </div>
                 )}
+                
                 {workedHours?.breakdown && workedHours.breakdown.length > 0 && (
                   <div>
                     <label className="text-sm font-medium">Recent Activity</label>
-                    <div className="space-y-2 mt-2">
-                      {workedHours.breakdown.slice(0, 5).map((entry, idx) => (
-                        <div key={idx} className="flex justify-between text-sm">
+                    <div className="space-y-2 mt-2 max-h-40 overflow-y-auto">
+                      {workedHours.breakdown.slice(0, 10).map((entry, idx) => (
+                        <div key={idx} className="flex justify-between items-center text-sm p-2 hover:bg-muted rounded">
                           <span className="text-muted-foreground">
-                            {new Date(entry.date).toLocaleDateString()}
+                            {new Date(entry.date).toLocaleDateString('es-ES', { 
+                              weekday: 'short',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
                           </span>
-                          <span className="font-medium">{entry.hours}h</span>
+                          <span className="font-semibold text-primary">{entry.hours}h</span>
                         </div>
                       ))}
                     </div>
+                  </div>
+                )}
+                
+                {(!workedHours?.breakdown || workedHours.breakdown.length === 0) && (
+                  <div className="text-sm text-muted-foreground italic p-3 bg-muted rounded text-center">
+                    No time entries yet
                   </div>
                 )}
               </>

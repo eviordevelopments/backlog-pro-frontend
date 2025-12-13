@@ -19,13 +19,6 @@ import {
 import { initializeSampleData } from "@/utils/sampleData";
 import { useAuth } from "./AuthContext";
 import { PeriodType, aggregateFinancialData } from "@/utils/financialPeriods";
-import {
-  calculateCAC,
-  calculateLTV,
-  calculateCashRunway,
-  calculateBurnRate,
-  calculateChurnRate,
-} from "@/api/finances/finances";
 
 interface AppContextType {
   projects: Project[];

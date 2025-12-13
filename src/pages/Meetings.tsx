@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useApp } from '@/context/AppContext';
+import { useAuth } from '@/context/AuthContext';
 import { useProjectContext } from '@/context/ProjectContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Video, Users, Clock, Calendar as CalendarIcon, ExternalLink } from 'lucide-react';
+import { toast } from 'sonner';
 import MeetingDialog from '@/components/meetings/MeetingDialog';
+import { createMeeting } from '@/api/meetings/meetings';
 
 interface MeetingItem {
   id: string;
@@ -19,9 +21,22 @@ interface MeetingItem {
 }
 
 export default function Meetings() {
+  const { user } = useAuth();
   const { selectedProject } = useProjectContext();
   const [meetings, setMeetings] = useState<MeetingItem[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const getToken = (): string | null => {
+    const sessionData = localStorage.getItem('auth_session');
+    if (!sessionData) return null;
+    try {
+      const session = JSON.parse(sessionData);
+      return session.accessToken;
+    } catch {
+      return null;
+    }
+  };
 
   // Load meetings from localStorage
   useEffect(() => {
@@ -36,8 +51,39 @@ export default function Meetings() {
     localStorage.setItem('meetings', JSON.stringify(meetings));
   }, [meetings]);
 
-  const handleAddMeeting = (newMeeting: MeetingItem) => {
-    setMeetings([...meetings, newMeeting]);
+  const handleAddMeeting = async (newMeeting: MeetingItem) => {
+    const token = getToken();
+    
+    if (token && user && selectedProject) {
+      try {
+        setLoading(true);
+        
+        // Call backend API
+        const createdMeeting = await createMeeting(token, {
+          title: newMeeting.title,
+          type: newMeeting.type as 'planning' | 'review' | 'retrospective' | 'standup' | 'other',
+          dateTime: newMeeting.dateTime,
+          duration: newMeeting.duration,
+          ownerId: user.id,
+          participants: newMeeting.participants,
+          projectId: selectedProject.id,
+        });
+        
+        toast.success('Meeting created successfully');
+        setMeetings([...meetings, newMeeting]);
+      } catch (error) {
+        console.error('Failed to create meeting:', error);
+        toast.error(error instanceof Error ? error.message : 'Failed to create meeting');
+        // Still add to local state as fallback
+        setMeetings([...meetings, newMeeting]);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // Fallback to local storage only
+      setMeetings([...meetings, newMeeting]);
+    }
+    
     setIsDialogOpen(false);
   };
 

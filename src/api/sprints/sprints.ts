@@ -10,70 +10,159 @@ const CREATE_SPRINT_MUTATION = `
       startDate
       endDate
       status
+      velocity
+      storyPointsCommitted
+      storyPointsCompleted
+      teamMembers
+      dailyStandupTime
       createdAt
+      updatedAt
     }
   }
 `;
 
-const LIST_SPRINTS_QUERY = `
+const GET_SPRINT_QUERY = `
+  query GetSprint($id: String!) {
+    getSprint(id: $id) {
+      id
+      name
+      goal
+      projectId
+      startDate
+      endDate
+      status
+      velocity
+      storyPointsCommitted
+      storyPointsCompleted
+      teamMembers
+      sprintPlanningDate
+      sprintReviewDate
+      sprintRetrospectiveDate
+      dailyStandupTime
+      retrospectiveNotes
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+const LIST_SPRINTS_BY_PROJECT_QUERY = `
   query ListSprintsByProject($projectId: String!) {
     listSprintsByProject(projectId: $projectId) {
       id
       name
       goal
-      projectId
       status
-    }
-  }
-`;
-
-const GET_SPRINT_METRICS_QUERY = `
-  query GetSprintMetrics($sprintId: String!) {
-    getSprintMetrics(sprintId: $sprintId) {
-      sprintId
-      sprintName
-      status
-      completedTasks
-      totalTasks
-      completionRate
       velocity
       storyPointsCommitted
       storyPointsCompleted
-      averageCycleTime
     }
   }
 `;
 
-export interface CreateSprintDto {
-  name: string;
-  goal: string;
-  projectId: string;
-  startDate: string;
-  endDate: string;
-}
+const UPDATE_SPRINT_MUTATION = `
+  mutation UpdateSprint($id: String!, $input: UpdateSprintDto!) {
+    updateSprint(id: $id, input: $input) {
+      id
+      name
+      goal
+      endDate
+      status
+      velocity
+      storyPointsCommitted
+      storyPointsCompleted
+      teamMembers
+      dailyStandupTime
+      retrospectiveNotes
+      updatedAt
+    }
+  }
+`;
 
-export interface SprintMetrics {
-  sprintId: string;
-  sprintName: string;
-  status: string;
-  completedTasks: number;
-  totalTasks: number;
-  completionRate: number;
-  velocity: number;
-  storyPointsCommitted: number;
-  storyPointsCompleted: number;
-  averageCycleTime: number;
-}
+const EXTEND_SPRINT_MUTATION = `
+  mutation ExtendSprint($id: String!, $newEndDate: String!) {
+    extendSprint(id: $id, newEndDate: $newEndDate) {
+      id
+      name
+      endDate
+      status
+      updatedAt
+    }
+  }
+`;
+
+const COMPLETE_SPRINT_MUTATION = `
+  mutation CompleteSprint($id: String!) {
+    completeSprint(id: $id) {
+      id
+      name
+      status
+      velocity
+      storyPointsCompleted
+      updatedAt
+    }
+  }
+`;
+
+const REGISTER_RETROSPECTIVE_MUTATION = `
+  mutation RegisterRetrospective($id: String!, $notes: String!) {
+    registerRetrospective(id: $id, notes: $notes) {
+      id
+      name
+      retrospectiveNotes
+      sprintRetrospectiveDate
+      updatedAt
+    }
+  }
+`;
+
+const DELETE_SPRINT_MUTATION = `
+  mutation DeleteSprint($id: String!) {
+    deleteSprint(id: $id)
+  }
+`;
 
 export interface Sprint {
   id: string;
   name: string;
-  goal: string;
+  goal?: string;
+  projectId?: string;
+  startDate?: string;
+  endDate?: string;
+  status: string;
+  velocity: number;
+  storyPointsCommitted: number;
+  storyPointsCompleted: number;
+  teamMembers?: string[];
+  sprintPlanningDate?: string;
+  sprintReviewDate?: string;
+  sprintRetrospectiveDate?: string;
+  dailyStandupTime?: string;
+  retrospectiveNotes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateSprintDto {
+  name: string;
+  goal?: string;
   projectId: string;
   startDate: string;
   endDate: string;
-  status: string;
-  createdAt: string;
+  dailyStandupTime?: string;
+}
+
+export interface UpdateSprintDto {
+  name?: string;
+  goal?: string;
+  endDate?: string;
+  status?: string;
+  velocity?: number;
+  storyPointsCommitted?: number;
+  storyPointsCompleted?: number;
+  teamMembers?: string[];
+  dailyStandupTime?: string;
+  retrospectiveNotes?: string;
 }
 
 export async function createSprint(
@@ -96,22 +185,7 @@ export async function createSprint(
     const result = await response.json();
 
     if (result.errors) {
-      const error = result.errors[0];
-      const errorMessage = error.message || 'Failed to create sprint';
-      
-      console.error('GraphQL Error:', result.errors);
-      console.error('Full response:', result);
-      console.error('Input sent:', input);
-      
-      if (error.extensions?.validationErrors) {
-        const validationErrors = error.extensions.validationErrors;
-        const messages = Object.entries(validationErrors)
-          .map(([field, msgs]: [string, any]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
-          .join('\n');
-        throw new Error(`Validation errors:\n${messages}`);
-      }
-      
-      throw new Error(errorMessage);
+      throw new Error(result.errors[0]?.message || 'Failed to create sprint');
     }
 
     if (!response.ok) {
@@ -124,20 +198,15 @@ export async function createSprint(
 
     return result.data.createSprint;
   } catch (error) {
-    console.error('Create sprint error:', error);
     throw error;
   }
 }
 
-export async function listSprints(
+export async function getSprint(
   token: string,
-  projectId?: string
-): Promise<Sprint[]> {
+  id: string
+): Promise<Sprint> {
   try {
-    if (!projectId) {
-      return [];
-    }
-
     const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
@@ -145,7 +214,44 @@ export async function listSprints(
         'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({
-        query: LIST_SPRINTS_QUERY,
+        query: GET_SPRINT_QUERY,
+        variables: { id },
+      }),
+    });
+
+    const result = await response.json();
+
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'Failed to get sprint');
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    if (!result.data?.getSprint) {
+      throw new Error('Sprint not found');
+    }
+
+    return result.data.getSprint;
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function listSprintsByProject(
+  token: string,
+  projectId: string
+): Promise<Sprint[]> {
+  try {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        query: LIST_SPRINTS_BY_PROJECT_QUERY,
         variables: { projectId },
       }),
     });
@@ -153,41 +259,24 @@ export async function listSprints(
     const result = await response.json();
 
     if (result.errors) {
-      const error = result.errors[0];
-      const errorMessage = error.message || 'Failed to fetch sprints';
-      
-      console.error('GraphQL Error:', result.errors);
-      
-      if (error.extensions?.validationErrors) {
-        const validationErrors = error.extensions.validationErrors;
-        const messages = Object.entries(validationErrors)
-          .map(([field, msgs]: [string, any]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
-          .join('\n');
-        throw new Error(`Validation errors:\n${messages}`);
-      }
-      
-      throw new Error(errorMessage);
+      throw new Error(result.errors[0]?.message || 'Failed to list sprints');
     }
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    if (!result.data?.listSprintsByProject) {
-      return [];
-    }
-
-    return result.data.listSprintsByProject;
+    return result.data?.listSprintsByProject || [];
   } catch (error) {
-    console.error('List sprints error:', error);
     throw error;
   }
 }
 
-export async function getSprintMetrics(
+export async function updateSprint(
   token: string,
-  sprintId: string
-): Promise<SprintMetrics> {
+  id: string,
+  input: UpdateSprintDto
+): Promise<Sprint> {
   try {
     const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
@@ -196,41 +285,171 @@ export async function getSprintMetrics(
         'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({
-        query: GET_SPRINT_METRICS_QUERY,
-        variables: { sprintId },
+        query: UPDATE_SPRINT_MUTATION,
+        variables: { id, input },
       }),
     });
 
     const result = await response.json();
 
     if (result.errors) {
-      const error = result.errors[0];
-      const errorMessage = error.message || 'Failed to get sprint metrics';
-      
-      console.error('GraphQL Error:', result.errors);
-      
-      if (error.extensions?.validationErrors) {
-        const validationErrors = error.extensions.validationErrors;
-        const messages = Object.entries(validationErrors)
-          .map(([field, msgs]: [string, any]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
-          .join('\n');
-        throw new Error(`Validation errors:\n${messages}`);
-      }
-      
-      throw new Error(errorMessage);
+      throw new Error(result.errors[0]?.message || 'Failed to update sprint');
     }
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    if (!result.data?.getSprintMetrics) {
-      throw new Error('No sprint metrics data returned');
+    if (!result.data?.updateSprint) {
+      throw new Error('No sprint data returned');
     }
 
-    return result.data.getSprintMetrics;
+    return result.data.updateSprint;
   } catch (error) {
-    console.error('Get sprint metrics error:', error);
+    throw error;
+  }
+}
+
+export async function extendSprint(
+  token: string,
+  id: string,
+  newEndDate: string
+): Promise<Sprint> {
+  try {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        query: EXTEND_SPRINT_MUTATION,
+        variables: { id, newEndDate },
+      }),
+    });
+
+    const result = await response.json();
+
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'Failed to extend sprint');
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    if (!result.data?.extendSprint) {
+      throw new Error('No sprint data returned');
+    }
+
+    return result.data.extendSprint;
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function completeSprint(
+  token: string,
+  id: string
+): Promise<Sprint> {
+  try {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        query: COMPLETE_SPRINT_MUTATION,
+        variables: { id },
+      }),
+    });
+
+    const result = await response.json();
+
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'Failed to complete sprint');
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    if (!result.data?.completeSprint) {
+      throw new Error('No sprint data returned');
+    }
+
+    return result.data.completeSprint;
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function registerRetrospective(
+  token: string,
+  id: string,
+  notes: string
+): Promise<Sprint> {
+  try {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        query: REGISTER_RETROSPECTIVE_MUTATION,
+        variables: { id, notes },
+      }),
+    });
+
+    const result = await response.json();
+
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'Failed to register retrospective');
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    if (!result.data?.registerRetrospective) {
+      throw new Error('No sprint data returned');
+    }
+
+    return result.data.registerRetrospective;
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function deleteSprint(
+  token: string,
+  id: string
+): Promise<void> {
+  try {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        query: DELETE_SPRINT_MUTATION,
+        variables: { id },
+      }),
+    });
+
+    const result = await response.json();
+
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'Failed to delete sprint');
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+  } catch (error) {
     throw error;
   }
 }

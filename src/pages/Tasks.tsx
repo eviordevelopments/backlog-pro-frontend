@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
 import { useProjectContext } from "@/context/ProjectContext";
+import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,35 +21,131 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Loader2 } from "lucide-react";
 import { Task, TaskPriority, TaskStatus } from "@/types";
 import { toast } from "sonner";
+import { 
+  createTask as createTaskAPI, 
+  updateTask as updateTaskAPI, 
+  deleteTask as deleteTaskAPI, 
+  listTasksBySprint,
+  listTasksWithoutSprint,
+  Task as APITask,
+  CreateTaskDto,
+  UpdateTaskDto
+} from "@/api/tasks/tasks";
 
 export default function Tasks() {
-  const { tasks, addTask, updateTask, deleteTask, teamMembers, sprints } =
-    useApp();
+  const { teamMembers, sprints } = useApp();
   const { projects, selectedProject: currentProject } = useProjectContext();
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [editingTask, setEditingTask] = useState<APITask | null>(null);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [tasks, setTasks] = useState<APITask[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const getToken = (): string | null => {
+    const sessionData = localStorage.getItem('auth_session');
+    if (!sessionData) return null;
+    try {
+      const session = JSON.parse(sessionData);
+      return session.accessToken;
+    } catch {
+      return null;
+    }
+  };
+
+  // Load tasks when project changes
+  useEffect(() => {
+    const loadTasks = async () => {
+      if (!currentProject) {
+        setTasks([]);
+        return;
+      }
+
+      setLoadingTasks(true);
+      try {
+        const token = getToken();
+        if (!token) {
+          toast.error("No authentication token found");
+          return;
+        }
+
+        const allTasks: APITask[] = [];
+        
+        // Load tasks from all sprints
+        for (const sprint of sprints) {
+          if (sprint.projectId === currentProject.id) {
+            const sprintTasks = await listTasksBySprint(token, sprint.id);
+            allTasks.push(...sprintTasks);
+          }
+        }
+        
+        // Load tasks without sprint
+        const tasksWithoutSprint = await listTasksWithoutSprint(token, currentProject.id);
+        allTasks.push(...tasksWithoutSprint);
+        
+        setTasks(allTasks);
+      } catch (error) {
+        console.error("Failed to load tasks:", error);
+        toast.error("Failed to load tasks");
+      } finally {
+        setLoadingTasks(false);
+      }
+    };
+
+    loadTasks();
+  }, [currentProject, sprints]);
 
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    status: "todo" as TaskStatus,
-    priority: "medium" as TaskPriority,
+    status: "todo",
+    priority: "medium",
     storyPoints: 0,
-    assignedTo: "",
-    estimatedDate: "",
+    assignedTo: "unassigned",
+    dueDate: "",
     tags: "",
-    sprintId: "",
-    projectId: currentProject?.id || "",
+    sprintId: "no-sprint",
+    projectId: "",
   });
 
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  // Update projectId when currentProject changes
+  useEffect(() => {
+    if (currentProject && !editingTask) {
+      setFormData(prev => ({
+        ...prev,
+        projectId: currentProject.id
+      }));
+    }
+  }, [currentProject, editingTask]);
+
+  // Reset form when dialog closes
+  useEffect(() => {
+    if (!isCreateOpen) {
+      setFormData({
+        title: "",
+        description: "",
+        status: "todo",
+        priority: "medium",
+        storyPoints: 0,
+        assignedTo: "unassigned",
+        dueDate: "",
+        tags: "",
+        sprintId: "no-sprint",
+        projectId: currentProject?.id || "",
+      });
+      setEditingTask(null);
+      setValidationErrors({});
+    }
+  }, [isCreateOpen, currentProject]);
 
   const filteredTasks = tasks
     .filter(task => !currentProject || task.projectId === currentProject.id)
@@ -68,29 +165,22 @@ export default function Tasks() {
   const validateForm = () => {
     const errors: Record<string, string> = {};
 
-    // Required field validation
     if (!formData.title.trim()) {
       errors.title = "Title is required";
     }
 
-    if (!formData.assignedTo) {
-      errors.assignedTo = "Assignee is required";
+    if (!formData.projectId) {
+      errors.projectId = "Project is required";
     }
 
-    // Data type validation
     if (formData.storyPoints < 0) {
       errors.storyPoints = "Story points must be non-negative";
     }
 
-    if (isNaN(formData.storyPoints)) {
-      errors.storyPoints = "Story points must be a valid number";
-    }
-
-    // Date validation
-    if (formData.estimatedDate) {
-      const estimatedDate = new Date(formData.estimatedDate);
-      if (isNaN(estimatedDate.getTime())) {
-        errors.estimatedDate = "Invalid date format";
+    if (formData.dueDate) {
+      const dueDate = new Date(formData.dueDate);
+      if (isNaN(dueDate.getTime())) {
+        errors.dueDate = "Invalid date format";
       }
     }
 
@@ -98,43 +188,81 @@ export default function Tasks() {
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate form
     if (!validateForm()) {
       toast.error("Please fix validation errors before submitting");
       return;
     }
 
+    setIsSubmitting(true);
     try {
-      const taskData = {
-        ...formData,
-        projectId: formData.projectId || currentProject?.id || "",
-        tags: formData.tags.split(",").map((t) => t.trim()).filter(t => t),
-        id: editingTask?.id || Date.now().toString(),
-        createdAt: editingTask?.createdAt || new Date().toISOString(),
-      };
+      const token = getToken();
+      if (!token) {
+        toast.error("No authentication token found");
+        return;
+      }
+
+      const tags = formData.tags.split(",").map((t) => t.trim()).filter(t => t);
+      const assignedTo = formData.assignedTo === "unassigned" ? undefined : formData.assignedTo || undefined;
+      const sprintId = formData.sprintId === "no-sprint" ? undefined : formData.sprintId || undefined;
 
       if (editingTask) {
-        updateTask(editingTask.id, taskData);
+        const updateData: UpdateTaskDto = {
+          title: formData.title,
+          description: formData.description,
+          status: formData.status,
+          priority: formData.priority,
+          storyPoints: formData.storyPoints,
+          assignedTo,
+          tags,
+          dueDate: formData.dueDate || undefined,
+        };
+        await updateTaskAPI(token, editingTask.id, updateData);
         toast.success("Task updated successfully");
       } else {
-        addTask(taskData as Task);
+        const createData: CreateTaskDto = {
+          title: formData.title,
+          description: formData.description || undefined,
+          projectId: formData.projectId || currentProject?.id || "",
+          sprintId,
+          storyPoints: formData.storyPoints || undefined,
+          tags: tags.length > 0 ? tags : undefined,
+          dueDate: formData.dueDate || undefined,
+        };
+        await createTaskAPI(token, createData);
         toast.success("Task created successfully");
       }
 
-      // Clear form and errors
+      // Reload tasks
+      const allTasks: APITask[] = [];
+      for (const sprint of sprints) {
+        if (sprint.projectId === currentProject?.id) {
+          const sprintTasks = await listTasksBySprint(token, sprint.id);
+          allTasks.push(...sprintTasks);
+        }
+      }
+      
+      // Load tasks without sprint
+      if (currentProject) {
+        const tasksWithoutSprint = await listTasksWithoutSprint(token, currentProject.id);
+        allTasks.push(...tasksWithoutSprint);
+      }
+      
+      setTasks(allTasks);
+
+      // Clear form
       setFormData({
         title: "",
         description: "",
         status: "todo",
         priority: "medium",
         storyPoints: 0,
-        assignedTo: "",
-        estimatedDate: "",
+        assignedTo: "unassigned",
+        dueDate: "",
         tags: "",
-        sprintId: "",
+        sprintId: "no-sprint",
         projectId: currentProject?.id || "",
       });
       setValidationErrors({});
@@ -142,30 +270,44 @@ export default function Tasks() {
       setIsCreateOpen(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to save task");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleEdit = (task: Task) => {
+  const handleEdit = (task: APITask) => {
     setEditingTask(task);
     setFormData({
-      ...task,
-      tags: task.tags.join(", "),
-      sprintId: task.sprintId || "",
-      projectId: task.projectId || currentProject?.id || "",
+      title: task.title,
+      description: task.description || "",
+      status: task.status,
+      priority: task.priority,
+      storyPoints: task.storyPoints || 0,
+      assignedTo: task.assignedTo || "unassigned",
+      dueDate: task.dueDate || "",
+      tags: task.tags?.join(", ") || "",
+      sprintId: task.sprintId || "no-sprint",
+      projectId: task.projectId,
     });
     setIsCreateOpen(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     try {
-      deleteTask(id);
+      const token = getToken();
+      if (!token) {
+        toast.error("No authentication token found");
+        return;
+      }
+      await deleteTaskAPI(token, id);
+      setTasks(tasks.filter(t => t.id !== id));
       toast.success("Task deleted successfully");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete task");
     }
   };
 
-  const getPriorityColor = (priority: TaskPriority) => {
+  const getPriorityColor = (priority: string) => {
     switch (priority) {
       case "critical":
         return "bg-destructive text-destructive-foreground";
@@ -175,10 +317,12 @@ export default function Tasks() {
         return "bg-accent text-accent-foreground";
       case "low":
         return "bg-muted text-muted-foreground";
+      default:
+        return "bg-secondary text-secondary-foreground";
     }
   };
 
-  const getStatusColor = (status: TaskStatus) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
       case "done":
         return "bg-success text-success-foreground";
@@ -187,6 +331,8 @@ export default function Tasks() {
       case "in-progress":
         return "bg-primary text-primary-foreground";
       case "todo":
+        return "bg-secondary text-secondary-foreground";
+      default:
         return "bg-secondary text-secondary-foreground";
     }
   };
@@ -200,9 +346,14 @@ export default function Tasks() {
             Manage and track all your tasks
           </p>
         </div>
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <Dialog open={isCreateOpen} onOpenChange={(open) => {
+          setIsCreateOpen(open);
+          if (!open) {
+            setEditingTask(null);
+          }
+        }}>
           <DialogTrigger asChild>
-            <Button className="gap-2">
+            <Button className="gap-2" onClick={() => setIsCreateOpen(true)}>
               <Plus className="h-4 w-4" />
               New Task
             </Button>
@@ -244,25 +395,32 @@ export default function Tasks() {
 
               <div className="space-y-2">
                 <Label>Project *</Label>
-                <Select
-                  value={formData.projectId}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, projectId: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select project" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projects && projects.length > 0 ? (
-                      projects.map((project) => (
+                {projects && projects.length > 0 ? (
+                  <Select
+                    value={formData.projectId}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, projectId: value })
+                    }
+                  >
+                    <SelectTrigger className={validationErrors.projectId ? "border-destructive" : ""}>
+                      <SelectValue placeholder="Select project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {projects.map((project) => (
                         <SelectItem key={project.id} value={project.id}>
                           {project.name}
                         </SelectItem>
-                      ))
-                    ) : null}
-                  </SelectContent>
-                </Select>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="p-2 border border-destructive rounded text-sm text-destructive">
+                    No projects available. Create a project first.
+                  </div>
+                )}
+                {validationErrors.projectId && (
+                  <p className="text-sm text-destructive">{validationErrors.projectId}</p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -271,7 +429,7 @@ export default function Tasks() {
                   <Select
                     value={formData.status}
                     onValueChange={(value) =>
-                      setFormData({ ...formData, status: value as TaskStatus })
+                      setFormData({ ...formData, status: value })
                     }
                   >
                     <SelectTrigger>
@@ -293,7 +451,7 @@ export default function Tasks() {
                     onValueChange={(value) =>
                       setFormData({
                         ...formData,
-                        priority: value as TaskPriority,
+                        priority: value,
                       })
                     }
                   >
@@ -334,40 +492,38 @@ export default function Tasks() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Estimated Date</Label>
+                  <Label>Due Date</Label>
                   <Input
                     type="date"
-                    value={formData.estimatedDate}
+                    value={formData.dueDate}
                     onChange={(e) => {
-                      setFormData({ ...formData, estimatedDate: e.target.value });
-                      if (validationErrors.estimatedDate) {
-                        setValidationErrors({ ...validationErrors, estimatedDate: "" });
+                      setFormData({ ...formData, dueDate: e.target.value });
+                      if (validationErrors.dueDate) {
+                        setValidationErrors({ ...validationErrors, dueDate: "" });
                       }
                     }}
-                    className={validationErrors.estimatedDate ? "border-destructive" : ""}
+                    className={validationErrors.dueDate ? "border-destructive" : ""}
                   />
-                  {validationErrors.estimatedDate && (
-                    <p className="text-sm text-destructive">{validationErrors.estimatedDate}</p>
+                  {validationErrors.dueDate && (
+                    <p className="text-sm text-destructive">{validationErrors.dueDate}</p>
                   )}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Assigned To *</Label>
+                  <Label>Assigned To</Label>
                   <Select
                     value={formData.assignedTo}
                     onValueChange={(value) => {
                       setFormData({ ...formData, assignedTo: value });
-                      if (validationErrors.assignedTo) {
-                        setValidationErrors({ ...validationErrors, assignedTo: "" });
-                      }
                     }}
                   >
-                    <SelectTrigger className={validationErrors.assignedTo ? "border-destructive" : ""}>
-                      <SelectValue placeholder="Select member" />
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select member (optional)" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="unassigned">None</SelectItem>
                       {teamMembers.map((member) => (
                         <SelectItem key={member.id} value={member.name}>
                           {member.name}
@@ -375,9 +531,6 @@ export default function Tasks() {
                       ))}
                     </SelectContent>
                   </Select>
-                  {validationErrors.assignedTo && (
-                    <p className="text-sm text-destructive">{validationErrors.assignedTo}</p>
-                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -414,8 +567,15 @@ export default function Tasks() {
                 />
               </div>
 
-              <Button type="submit" className="w-full">
-                {editingTask ? "Update Task" : "Create Task"}
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {editingTask ? "Updating..." : "Creating..."}
+                  </>
+                ) : (
+                  editingTask ? "Update Task" : "Create Task"
+                )}
               </Button>
             </form>
           </DialogContent>
@@ -514,15 +674,15 @@ export default function Tasks() {
                       Assigned: <strong>{task.assignedTo}</strong>
                     </span>
                   )}
-                  {task.estimatedDate && (
+                  {task.dueDate && (
                     <span className="text-muted-foreground">
                       Due:{" "}
                       <strong>
-                        {new Date(task.estimatedDate).toLocaleDateString()}
+                        {new Date(task.dueDate).toLocaleDateString()}
                       </strong>
                     </span>
                   )}
-                  {task.tags.map((tag) => (
+                  {task.tags && task.tags.map((tag) => (
                     <Badge key={tag} variant="outline">
                       {tag}
                     </Badge>

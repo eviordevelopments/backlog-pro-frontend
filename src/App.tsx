@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { AppProvider } from "./context/AppContext";
 import { ProjectProvider } from "./context/ProjectContext";
 import { ClientProvider } from "./context/ClientContext";
+import { TaskProvider } from "./context/TaskContext";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { LoadingScreen } from "./components/auth/LoadingScreen";
 import { AppLayout } from "./components/layout/AppLayout";
@@ -79,15 +80,17 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <ProjectProvider>
-        <ClientProvider>
-          <AppProvider>
-            <TooltipProvider>
-              <Toaster />
-              <Sonner />
-              <AppRoutes />
-            </TooltipProvider>
-          </AppProvider>
-        </ClientProvider>
+        <TaskProvider>
+          <ClientProvider>
+            <AppProvider>
+              <TooltipProvider>
+                <Toaster />
+                <Sonner />
+                <AppRoutes />
+              </TooltipProvider>
+            </AppProvider>
+          </ClientProvider>
+        </TaskProvider>
       </ProjectProvider>
     </AuthProvider>
   </QueryClientProvider>

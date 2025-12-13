@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useClients } from "@/hooks/use-clients";
-import { Client, CreateClientInput, ClientListItem } from "@/api/clients/clients";
+import { Client, CreateClientInput, ClientListItem, getClient } from "@/api/clients/clients";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,7 +33,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Mail, Phone, Building2 } from "lucide-react";
+import { Plus, Mail, Phone, Building2, Eye, TrendingUp, DollarSign } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 const createClientSchema = z.object({
@@ -60,6 +60,20 @@ export default function Clients() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [openCreate, setOpenCreate] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [openDetails, setOpenDetails] = useState(false);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+
+  const getToken = (): string | null => {
+    const sessionData = localStorage.getItem('auth_session');
+    if (!sessionData) return null;
+    try {
+      const session = JSON.parse(sessionData);
+      return session.accessToken;
+    } catch {
+      return null;
+    }
+  };
 
   const form = useForm<CreateClientFormValues>({
     resolver: zodResolver(createClientSchema),
@@ -104,6 +118,32 @@ export default function Clients() {
       isMounted = false;
     };
   }, []);
+
+  const handleViewDetails = async (clientId: string) => {
+    try {
+      setLoadingDetails(true);
+      const token = getToken();
+      if (!token) {
+        toast({
+          title: "Error",
+          description: "No active session",
+          variant: "destructive",
+        });
+        return;
+      }
+      const client = await getClient(token, clientId);
+      setSelectedClient(client);
+      setOpenDetails(true);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to load client details",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
 
   const onSubmit = async (data: CreateClientFormValues) => {
     try {
@@ -279,6 +319,7 @@ export default function Clients() {
                     <TableHead>Company</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Created</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -309,6 +350,16 @@ export default function Clients() {
                       <TableCell className="text-sm text-muted-foreground">
                         {new Date(client.createdAt).toLocaleDateString()}
                       </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleViewDetails(client.id)}
+                          disabled={loadingDetails}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -317,6 +368,111 @@ export default function Clients() {
           </CardContent>
         </Card>
       )}
+
+      {/* Client Details Modal */}
+      <Dialog open={openDetails} onOpenChange={setOpenDetails}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Client Details</DialogTitle>
+            <DialogDescription>Complete information about the client</DialogDescription>
+          </DialogHeader>
+          
+          {loadingDetails ? (
+            <div className="flex items-center justify-center py-8">
+              <Spinner size="lg" />
+            </div>
+          ) : selectedClient ? (
+            <div className="space-y-6">
+              {/* Basic Information */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Name</label>
+                  <p className="text-lg font-semibold">{selectedClient.name}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Status</label>
+                  <div className="mt-1">
+                    <Badge className={statusColors[selectedClient.status] || "bg-gray-100 text-gray-800"}>
+                      {selectedClient.status}
+                    </Badge>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                    <Mail className="h-4 w-4" />
+                    Email
+                  </label>
+                  <p className="text-sm">{selectedClient.email}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                    <Phone className="h-4 w-4" />
+                    Phone
+                  </label>
+                  <p className="text-sm">{selectedClient.phone || '-'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                    <Building2 className="h-4 w-4" />
+                    Company
+                  </label>
+                  <p className="text-sm">{selectedClient.company || '-'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Industry</label>
+                  <p className="text-sm">{selectedClient.industry || '-'}</p>
+                </div>
+              </div>
+
+              {/* Financial Metrics */}
+              <div className="border-t pt-4">
+                <h3 className="font-semibold mb-4">Financial Metrics</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-gradient-to-br from-primary/10 to-accent/10 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                      <DollarSign className="h-4 w-4" />
+                      <span>LTV</span>
+                    </div>
+                    <p className="text-2xl font-bold text-primary">
+                      ${selectedClient.ltv?.toLocaleString() || '0'}
+                    </p>
+                  </div>
+                  <div className="bg-gradient-to-br from-accent/10 to-primary/10 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                      <TrendingUp className="h-4 w-4" />
+                      <span>CAC</span>
+                    </div>
+                    <p className="text-2xl font-bold text-accent">
+                      ${selectedClient.cac?.toLocaleString() || '0'}
+                    </p>
+                  </div>
+                  <div className="bg-gradient-to-br from-success/10 to-primary/10 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                      <DollarSign className="h-4 w-4" />
+                      <span>MRR</span>
+                    </div>
+                    <p className="text-2xl font-bold text-success">
+                      ${selectedClient.mrr?.toLocaleString() || '0'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Timestamps */}
+              <div className="border-t pt-4 text-sm text-muted-foreground">
+                <div className="flex justify-between">
+                  <span>Created:</span>
+                  <span>{new Date(selectedClient.createdAt).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between mt-2">
+                  <span>Last Updated:</span>
+                  <span>{new Date(selectedClient.updatedAt).toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

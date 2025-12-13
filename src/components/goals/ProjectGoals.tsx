@@ -8,9 +8,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Target, CheckCircle2, Circle, Trash2, Edit } from 'lucide-react';
+import { Plus, Target, CheckCircle2, Circle, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { createGoal, updateGoalProgress, getUserGoals, Goal, CreateGoalDto } from '@/api/goals/goals';
+import { createGoal, updateGoalProgress, getUserGoals, deleteGoal, Goal, CreateGoalDto } from '@/api/goals/goals';
 
 export default function ProjectGoals() {
   const { user } = useAuth();
@@ -149,8 +149,15 @@ export default function ProjectGoals() {
   };
 
   const handleDelete = async (id: string) => {
+    const token = getToken();
+    if (!token) {
+      toast.error('Not authenticated');
+      return;
+    }
+
     try {
       setLoading(true);
+      await deleteGoal(token, id);
       const updatedGoals = goals.filter(g => g.id !== id);
       saveGoalsLocal(updatedGoals);
       toast.success('Goal deleted successfully');
@@ -173,8 +180,13 @@ export default function ProjectGoals() {
       setLoading(true);
       const updated = await updateGoalProgress(token, goalId, newValue);
       
-      // Update local storage
-      const updatedGoals = goals.map(g => g.id === goalId ? updated : g);
+      // Update local storage - merge with existing goal to preserve all fields
+      const updatedGoals = goals.map(g => {
+        if (g.id === goalId) {
+          return { ...g, ...updated };
+        }
+        return g;
+      });
       saveGoalsLocal(updatedGoals);
       
       toast.success('Goal progress updated');

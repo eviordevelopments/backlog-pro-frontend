@@ -89,6 +89,12 @@ const GET_USER_GOALS_QUERY = `
   }
 `;
 
+const DELETE_GOAL_MUTATION = `
+  mutation DeleteGoal($goalId: String!) {
+    deleteGoal(goalId: $goalId)
+  }
+`;
+
 
 
 export async function createGoal(token: string, input: CreateGoalDto): Promise<Goal> {
@@ -190,6 +196,36 @@ export async function getUserGoals(token: string, ownerId: string): Promise<Goal
     }
 
     return result.data?.getUserGoals || [];
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function deleteGoal(token: string, goalId: string): Promise<boolean> {
+  try {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        query: DELETE_GOAL_MUTATION,
+        variables: { goalId },
+      }),
+    });
+
+    const result = await response.json();
+
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'Failed to delete goal');
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return result.data?.deleteGoal || false;
   } catch (error) {
     throw error;
   }

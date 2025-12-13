@@ -27,6 +27,17 @@ export interface CreateRiskDto {
   mitigationStrategy?: string;
 }
 
+export interface UpdateRiskDto {
+  title?: string;
+  description?: string;
+  category?: string;
+  probability?: 'low' | 'medium' | 'high' | 'critical';
+  impact?: 'low' | 'medium' | 'high' | 'critical';
+  status?: 'open' | 'mitigated' | 'closed';
+  mitigationStrategy?: string;
+  responsibleId?: string;
+}
+
 const CREATE_RISK_MUTATION = `
   mutation CreateRisk($input: CreateRiskDto!) {
     createRisk(input: $input) {
@@ -52,13 +63,44 @@ const GET_PROJECT_RISKS_QUERY = `
     getProjectRisks(projectId: $projectId) {
       id
       title
+      description
+      category
+      probability
+      impact
+      severity
+      status
+      projectId
+      responsibleId
+      mitigationStrategy
+      isCore
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+const UPDATE_RISK_MUTATION = `
+  mutation UpdateRisk($id: String!, $input: UpdateRiskDto!) {
+    updateRisk(id: $id, input: $input) {
+      id
+      title
+      description
       category
       probability
       impact
       severity
       status
       mitigationStrategy
+      responsibleId
+      isCore
+      updatedAt
     }
+  }
+`;
+
+const DELETE_RISK_MUTATION = `
+  mutation DeleteRisk($id: String!) {
+    deleteRisk(id: $id)
   }
 `;
 
@@ -121,6 +163,70 @@ export async function getProjectRisks(token: string, projectId: string): Promise
     }
 
     return result.data?.getProjectRisks || [];
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function updateRisk(token: string, id: string, input: UpdateRiskDto): Promise<Risk> {
+  try {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        query: UPDATE_RISK_MUTATION,
+        variables: { id, input },
+      }),
+    });
+
+    const result = await response.json();
+
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'Failed to update risk');
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    if (!result.data?.updateRisk) {
+      throw new Error('No risk data returned');
+    }
+
+    return result.data.updateRisk;
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function deleteRisk(token: string, id: string): Promise<boolean> {
+  try {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        query: DELETE_RISK_MUTATION,
+        variables: { id },
+      }),
+    });
+
+    const result = await response.json();
+
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'Failed to delete risk');
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return result.data?.deleteRisk || false;
   } catch (error) {
     throw error;
   }

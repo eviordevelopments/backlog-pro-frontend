@@ -13,7 +13,16 @@ const CREATE_USER_STORY_MUTATION = `
       status
       projectId
       sprintId
+      acceptanceCriteria {
+        id
+        description
+        completed
+      }
+      definitionOfDone
+      impactMetrics
+      assignedTo
       createdAt
+      updatedAt
     }
   }
 `;
@@ -29,21 +38,54 @@ const GET_PROJECT_BACKLOG_QUERY = `
       priority
       storyPoints
       status
+      projectId
       sprintId
+      acceptanceCriteria {
+        id
+        description
+        completed
+      }
+      definitionOfDone
+      impactMetrics
+      assignedTo
+      createdAt
+      updatedAt
     }
   }
 `;
 
-export interface CreateUserStoryDto {
-  title: string;
-  userType: string;
-  action: string;
-  benefit: string;
-  priority: string;
-  storyPoints: number;
-  projectId: string;
-  sprintId?: string;
-  acceptanceCriteria: string[];
+const UPDATE_USER_STORY_MUTATION = `
+  mutation UpdateUserStory($id: String!, $input: UpdateUserStoryDto!) {
+    updateUserStory(id: $id, input: $input) {
+      id
+      title
+      priority
+      storyPoints
+      status
+      sprintId
+      acceptanceCriteria {
+        id
+        description
+        completed
+      }
+      definitionOfDone
+      impactMetrics
+      assignedTo
+      updatedAt
+    }
+  }
+`;
+
+const DELETE_USER_STORY_MUTATION = `
+  mutation DeleteUserStory($id: String!) {
+    deleteUserStory(id: $id)
+  }
+`;
+
+export interface AcceptanceCriteria {
+  id?: string;
+  description: string;
+  completed?: boolean;
 }
 
 export interface UserStory {
@@ -52,13 +94,46 @@ export interface UserStory {
   userType: string;
   action: string;
   benefit: string;
-  priority: string;
+  priority: "low" | "medium" | "high" | "critical";
   storyPoints: number;
-  status: string;
+  status: "backlog" | "ready" | "in-progress" | "done";
+  projectId: string;
+  sprintId?: string;
+  acceptanceCriteria?: AcceptanceCriteria[] | string[];
+  definitionOfDone?: string;
+  impactMetrics?: string;
+  assignedTo?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateUserStoryDto {
+  title: string;
+  userType: string;
+  action: string;
+  benefit: string;
+  priority?: "low" | "medium" | "high" | "critical";
+  storyPoints: number;
   projectId: string;
   sprintId?: string;
   acceptanceCriteria?: string[];
-  createdAt: string;
+  definitionOfDone?: string;
+  impactMetrics?: string;
+}
+
+export interface UpdateUserStoryDto {
+  title?: string;
+  userType?: string;
+  action?: string;
+  benefit?: string;
+  priority?: "low" | "medium" | "high" | "critical";
+  storyPoints?: number;
+  status?: "backlog" | "ready" | "in-progress" | "done";
+  sprintId?: string;
+  acceptanceCriteria?: string[];
+  definitionOfDone?: string;
+  impactMetrics?: string;
+  assignedTo?: string;
 }
 
 export async function createUserStory(
@@ -81,20 +156,7 @@ export async function createUserStory(
     const result = await response.json();
 
     if (result.errors) {
-      const error = result.errors[0];
-      const errorMessage = error.message || 'Failed to create user story';
-      
-      console.error('GraphQL Error:', result.errors);
-      
-      if (error.extensions?.validationErrors) {
-        const validationErrors = error.extensions.validationErrors;
-        const messages = Object.entries(validationErrors)
-          .map(([field, msgs]: [string, any]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
-          .join('\n');
-        throw new Error(`Validation errors:\n${messages}`);
-      }
-      
-      throw new Error(errorMessage);
+      throw new Error(result.errors[0]?.message || 'Failed to create user story');
     }
 
     if (!response.ok) {
@@ -105,12 +167,8 @@ export async function createUserStory(
       throw new Error('No user story data returned');
     }
 
-    return {
-      ...result.data.createUserStory,
-      acceptanceCriteria: input.acceptanceCriteria
-    };
+    return result.data.createUserStory;
   } catch (error) {
-    console.error('Create user story error:', error);
     throw error;
   }
 }
@@ -120,10 +178,6 @@ export async function getProjectBacklog(
   projectId: string
 ): Promise<UserStory[]> {
   try {
-    if (!projectId) {
-      return [];
-    }
-
     const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
@@ -139,40 +193,86 @@ export async function getProjectBacklog(
     const result = await response.json();
 
     if (result.errors) {
-      const error = result.errors[0];
-      const errorMessage = error.message || 'Failed to fetch user stories';
-      
-      console.error('GraphQL Error:', result.errors);
-      
-      if (error.extensions?.validationErrors) {
-        const validationErrors = error.extensions.validationErrors;
-        const messages = Object.entries(validationErrors)
-          .map(([field, msgs]: [string, any]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
-          .join('\n');
-        throw new Error(`Validation errors:\n${messages}`);
-      }
-      
-      throw new Error(errorMessage);
+      throw new Error(result.errors[0]?.message || 'Failed to fetch project backlog');
     }
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    if (!result.data?.getProjectBacklog) {
-      return [];
+    return result.data?.getProjectBacklog || [];
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function updateUserStory(
+  token: string,
+  id: string,
+  input: UpdateUserStoryDto
+): Promise<UserStory> {
+  try {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        query: UPDATE_USER_STORY_MUTATION,
+        variables: { id, input },
+      }),
+    });
+
+    const result = await response.json();
+
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'Failed to update user story');
     }
 
-    return result.data.getProjectBacklog.map((story: any) => ({
-      ...story,
-      acceptanceCriteria: story.acceptanceCriteria ? 
-        (Array.isArray(story.acceptanceCriteria) && typeof story.acceptanceCriteria[0] === 'object'
-          ? story.acceptanceCriteria.map((c: any) => c.description || c)
-          : story.acceptanceCriteria)
-        : []
-    }));
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    if (!result.data?.updateUserStory) {
+      throw new Error('No user story data returned');
+    }
+
+    return result.data.updateUserStory;
   } catch (error) {
-    console.error('Get project backlog error:', error);
+    throw error;
+  }
+}
+
+export async function deleteUserStory(
+  token: string,
+  id: string
+): Promise<boolean> {
+  try {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        query: DELETE_USER_STORY_MUTATION,
+        variables: { id },
+      }),
+    });
+
+    const result = await response.json();
+
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'Failed to delete user story');
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return result.data?.deleteUserStory || false;
+  } catch (error) {
     throw error;
   }
 }

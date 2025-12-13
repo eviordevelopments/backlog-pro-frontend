@@ -276,3 +276,22 @@ export interface FilterState {
   teamMembers: string[];
   viewMode: 'day' | 'week' | 'month';
 }
+
+export interface Goal {
+  id: string;
+  title: string;
+  description: string;
+  type: 'personal' | 'team';
+  category: string;
+  period: 'weekly' | 'monthly' | 'quarterly' | 'annual';
+  targetValue: number;
+  currentValue: number;
+  progress: number;
+  unit: string;
+  ownerId: string;
+  startDate: string;
+  endDate: string;
+  status: 'active' | 'completed' | 'cancelled';
+  createdAt: string;
+  updatedAt: string;
+}

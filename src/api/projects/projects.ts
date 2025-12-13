@@ -6,6 +6,33 @@ const LIST_PROJECTS_QUERY = `
       id
       name
       description
+      clientId
+      status
+      budget
+      spent
+      progress
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+const GET_PROJECT_QUERY = `
+  query GetProject($projectId: String!) {
+    getProject(projectId: $projectId) {
+      id
+      name
+      description
+      clientId
+      status
+      budget
+      spent
+      progress
+      methodology
+      startDate
+      endDate
+      createdAt
+      updatedAt
     }
   }
 `;
@@ -16,16 +43,61 @@ const CREATE_PROJECT_MUTATION = `
       id
       name
       description
+      clientId
+      status
+      budget
+      spent
+      progress
+      createdAt
+      updatedAt
     }
   }
 `;
 
 const UPDATE_PROJECT_MUTATION = `
-  mutation UpdateProject($id: String!, $input: UpdateProjectDto!) {
-    updateProject(id: $id, input: $input) {
+  mutation UpdateProject($projectId: String!, $input: UpdateProjectDto!) {
+    updateProject(projectId: $projectId, input: $input) {
       id
       name
       description
+      status
+      budget
+      progress
+      updatedAt
+    }
+  }
+`;
+
+const DELETE_PROJECT_MUTATION = `
+  mutation DeleteProject($projectId: String!) {
+    deleteProject(projectId: $projectId)
+  }
+`;
+
+const ADD_PROJECT_MEMBER_MUTATION = `
+  mutation AddProjectMember($projectId: String!, $input: AddMemberDto!) {
+    addProjectMember(projectId: $projectId, input: $input) {
+      id
+      projectId
+      userId
+      role
+      joinedAt
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+const GET_PROJECT_MEMBERS_QUERY = `
+  query GetProjectMembers($projectId: String!) {
+    getProjectMembers(projectId: $projectId) {
+      id
+      projectId
+      userId
+      role
+      joinedAt
+      createdAt
+      updatedAt
     }
   }
 `;
@@ -34,23 +106,56 @@ export interface Project {
   id: string;
   name: string;
   description?: string;
+  clientId?: string;
+  status?: string;
+  budget?: number;
+  spent?: number;
+  progress?: number;
+  methodology?: string;
+  startDate?: string;
+  endDate?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CreateProjectDto {
   name: string;
   description?: string;
+  clientId?: string;
+  status?: string;
+  budget?: number;
+  methodology?: string;
+  startDate?: string;
 }
 
 export interface UpdateProjectDto {
   name?: string;
   description?: string;
+  status?: string;
+  budget?: number;
+  progress?: number;
+}
+
+export interface ProjectMember {
+  id: string;
+  projectId: string;
+  userId: string;
+  role: string;
+  joinedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AddMemberDto {
+  userId: string;
+  role: string;
 }
 
 export async function updateProject(
   token: string,
   projectId: string,
   input: UpdateProjectDto
-): Promise<any> {
+): Promise<Project> {
   try {
     const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
@@ -60,7 +165,7 @@ export async function updateProject(
       },
       body: JSON.stringify({
         query: UPDATE_PROJECT_MUTATION,
-        variables: { id: projectId, input },
+        variables: { projectId, input },
       }),
     });
 
@@ -153,16 +258,6 @@ export async function createProject(
 }
 
 
-const GET_PROJECT_QUERY = `
-  query GetProject($id: String!) {
-    getProject(id: $id) {
-      id
-      name
-      description
-    }
-  }
-`;
-
 export async function getProject(token: string, projectId: string): Promise<Project> {
   try {
     const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
@@ -173,7 +268,7 @@ export async function getProject(token: string, projectId: string): Promise<Proj
       },
       body: JSON.stringify({
         query: GET_PROJECT_QUERY,
-        variables: { id: projectId },
+        variables: { projectId },
       }),
     });
 
@@ -197,14 +292,6 @@ export async function getProject(token: string, projectId: string): Promise<Proj
   }
 }
 
-const DELETE_PROJECT_MUTATION = `
-  mutation DeleteProject($id: String!) {
-    deleteProject(id: $id) {
-      id
-    }
-  }
-`;
-
 export async function deleteProject(token: string, projectId: string): Promise<void> {
   try {
     const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
@@ -215,7 +302,7 @@ export async function deleteProject(token: string, projectId: string): Promise<v
       },
       body: JSON.stringify({
         query: DELETE_PROJECT_MUTATION,
-        variables: { id: projectId },
+        variables: { projectId },
       }),
     });
 
@@ -228,6 +315,77 @@ export async function deleteProject(token: string, projectId: string): Promise<v
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function addProjectMember(
+  token: string,
+  projectId: string,
+  input: AddMemberDto
+): Promise<ProjectMember> {
+  try {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        query: ADD_PROJECT_MEMBER_MUTATION,
+        variables: { projectId, input },
+      }),
+    });
+
+    const result = await response.json();
+
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'Failed to add project member');
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    if (!result.data?.addProjectMember) {
+      throw new Error('No member data returned');
+    }
+
+    return result.data.addProjectMember;
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function getProjectMembers(
+  token: string,
+  projectId: string
+): Promise<ProjectMember[]> {
+  try {
+    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        query: GET_PROJECT_MEMBERS_QUERY,
+        variables: { projectId },
+      }),
+    });
+
+    const result = await response.json();
+
+    if (result.errors) {
+      throw new Error(result.errors[0]?.message || 'Failed to get project members');
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return result.data?.getProjectMembers || [];
   } catch (error) {
     throw error;
   }

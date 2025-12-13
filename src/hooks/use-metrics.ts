@@ -1,107 +1,91 @@
-import { useEffect, useState } from 'react';
-import { useAuth } from '@/context/AuthContext';
-import {
-  subscribeToDashboardMetrics,
-  subscribeToProjectMetrics,
-  DashboardMetrics,
-  ProjectMetrics,
-} from '@/api/metrics/metrics';
+import { useState, useEffect } from 'react';
+import { getDashboardMetrics, getProjectMetrics, DashboardMetrics, ProjectMetrics } from '@/api/metrics/metrics';
 
-export const useDashboardMetrics = () => {
-  const { user } = useAuth();
+export function useDashboardMetrics() {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
-  const [error, setError] = useState<Error | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user) {
-      setIsConnected(false);
-      return;
-    }
+    const loadMetrics = async () => {
+      try {
+        const sessionData = localStorage.getItem('auth_session');
+        if (!sessionData) {
+          setError('No authentication token found');
+          return;
+        }
 
-    const getToken = (): string => {
-      const sessionData = localStorage.getItem('auth_session');
-      if (!sessionData) {
-        throw new Error('No active session');
+        const session = JSON.parse(sessionData);
+        const token = session.accessToken;
+
+        if (!token) {
+          setError('No authentication token found');
+          return;
+        }
+
+        const data = await getDashboardMetrics(token);
+        setMetrics(data);
+        setIsConnected(true);
+        setError(null);
+      } catch (err) {
+        console.error('Failed to load dashboard metrics:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load metrics');
+        setIsConnected(false);
       }
-      const session = JSON.parse(sessionData);
-      return session.accessToken;
     };
 
-    try {
-      const token = getToken();
+    loadMetrics();
+    const interval = setInterval(loadMetrics, 30000); // Refresh every 30 seconds
 
-      const unsubscribe = subscribeToDashboardMetrics(
-        token,
-        (data) => {
-          setMetrics(data);
-          setError(null);
-          setIsConnected(true);
-        },
-        (err) => {
-          setError(err);
-          setIsConnected(false);
-        }
-      );
+    return () => clearInterval(interval);
+  }, []);
 
-      return () => {
-        unsubscribe();
-      };
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Unknown error'));
-      setIsConnected(false);
-    }
-  }, [user]);
+  return { metrics, isConnected, error };
+}
 
-  return { metrics, error, isConnected };
-};
-
-export const useProjectMetrics = (projectId: string) => {
-  const { user } = useAuth();
+export function useProjectMetrics(projectId: string) {
   const [metrics, setMetrics] = useState<ProjectMetrics | null>(null);
-  const [error, setError] = useState<Error | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user || !projectId) {
-      setIsConnected(false);
+    if (!projectId) {
+      setMetrics(null);
       return;
     }
 
-    const getToken = (): string => {
-      const sessionData = localStorage.getItem('auth_session');
-      if (!sessionData) {
-        throw new Error('No active session');
+    const loadMetrics = async () => {
+      try {
+        const sessionData = localStorage.getItem('auth_session');
+        if (!sessionData) {
+          setError('No authentication token found');
+          return;
+        }
+
+        const session = JSON.parse(sessionData);
+        const token = session.accessToken;
+
+        if (!token) {
+          setError('No authentication token found');
+          return;
+        }
+
+        const data = await getProjectMetrics(token, projectId);
+        setMetrics(data);
+        setIsConnected(true);
+        setError(null);
+      } catch (err) {
+        console.error('Failed to load project metrics:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load metrics');
+        setIsConnected(false);
       }
-      const session = JSON.parse(sessionData);
-      return session.accessToken;
     };
 
-    try {
-      const token = getToken();
+    loadMetrics();
+    const interval = setInterval(loadMetrics, 30000); // Refresh every 30 seconds
 
-      const unsubscribe = subscribeToProjectMetrics(
-        token,
-        projectId,
-        (data) => {
-          setMetrics(data);
-          setError(null);
-          setIsConnected(true);
-        },
-        (err) => {
-          setError(err);
-          setIsConnected(false);
-        }
-      );
+    return () => clearInterval(interval);
+  }, [projectId]);
 
-      return () => {
-        unsubscribe();
-      };
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Unknown error'));
-      setIsConnected(false);
-    }
-  }, [user, projectId]);
-
-  return { metrics, error, isConnected };
-};
+  return { metrics, isConnected, error };
+}
