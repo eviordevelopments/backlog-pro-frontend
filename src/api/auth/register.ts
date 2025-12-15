@@ -3,10 +3,11 @@ import { API_CONFIG } from '@/config/api';
 const SIGNUP_MUTATION = `
   mutation Signup($input: SignupInput!) {
     signup(input: $input) {
-      token
       userId
       email
       name
+      message
+      requiresEmailConfirmation
     }
   }
 `;
@@ -18,10 +19,11 @@ export interface SignupInput {
 }
 
 export interface SignupResponse {
-  token: string;
   userId: string;
   email: string;
   name: string;
+  message: string;
+  requiresEmailConfirmation: boolean;
 }
 
 export async function signup(input: SignupInput): Promise<SignupResponse> {

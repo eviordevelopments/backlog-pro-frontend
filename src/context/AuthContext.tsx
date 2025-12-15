@@ -38,6 +38,7 @@ export interface AuthError {
 // AuthContext interface
 export interface AuthContextType {
   user: User | null;
+  token: string | null;
   loading: boolean;
   error: AuthError | null;
   login: (email: string, password: string) => Promise<void>;
@@ -55,6 +56,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<AuthError | null>(null);
 
@@ -142,10 +144,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           if (session.expiresAt > Date.now()) {
             // Session is valid, restore user state
             setUser(session.user);
+            setToken(session.accessToken);
           } else {
             // Session expired, clear it and set error
             localStorage.removeItem("auth_session");
             setUser(null);
+            setToken(null);
             setError({
               code: AuthErrorCode.SESSION_EXPIRED,
               message: "Your session has expired. Please log in again.",
@@ -197,6 +201,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       // Update user state
       setUser(authenticatedUser);
+      setToken(response.token);
     } catch (error) {
       // Create user-friendly error and store it
       const authError = createAuthError(error);
@@ -234,6 +239,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       };
       const response = await signup(signupInput);
 
+      // If email confirmation is required, don't auto-login
+      if (response.requiresEmailConfirmation) {
+        // Just clear loading state and let the component handle redirect
+        setLoading(false);
+        return;
+      }
+
       // Auto-login user after successful registration (Requirement 5.4)
       const newUser: User = {
         id: response.userId,
@@ -245,13 +257,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Store session data
       const session: Session = {
         user: newUser,
-        accessToken: response.token,
+        accessToken: response.token || "",
         expiresAt: Date.now() + 3600000, // 1 hour expiration
       };
       localStorage.setItem("auth_session", JSON.stringify(session));
 
       // Update user state
       setUser(newUser);
+      setToken(response.token || "");
     } catch (error) {
       // Create user-friendly error and store it
       const authError = createAuthError(error);
@@ -275,11 +288,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       // Clear user state
       setUser(null);
+      setToken(null);
     } catch (error) {
       console.error("Error during logout:", error);
       // Even if something fails, clear local state
       localStorage.removeItem("auth_session");
       setUser(null);
+      setToken(null);
       
       // Set error but don't throw - logout should always succeed locally
       const authError = createAuthError(error);
@@ -359,6 +374,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     <AuthContext.Provider
       value={{
         user,
+        token,
         loading,
         error,
         login,

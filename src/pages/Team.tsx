@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
 import { useProjectContext } from "@/context/ProjectContext";
 import { useAuth } from "@/context/AuthContext";
+import { useTeamMembers } from "@/hooks/use-team-members";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,15 +16,16 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Pencil, TrendingUp, Clock, CheckCircle2, UserCheck, UserX, Upload } from "lucide-react";
+import { Pencil, TrendingUp, Clock, CheckCircle2, UserCheck, UserX, Upload, AlertCircle } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { TeamMember } from "@/types";
 import { toast } from "sonner";
 
 export default function Team() {
-  const { tasks, teamMembers } = useApp();
+  const { tasks } = useApp();
   const { selectedProject: currentProject, projectMembers, getProjectMembersDetails, addMemberToProject } = useProjectContext();
   const { user } = useAuth();
+  const { teamMembers, loading: loadingTeamMembers, error: teamMembersError } = useTeamMembers();
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [loadingMembers, setLoadingMembers] = useState(false);
 
@@ -153,7 +155,26 @@ export default function Team() {
         </p>
       </div>
 
-      {teamMembers.length === 0 && (
+      {loadingTeamMembers && (
+        <Card className="glass">
+          <CardContent className="pt-6">
+            <p className="text-muted-foreground text-center">Loading team members...</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {teamMembersError && (
+        <Card className="glass border-destructive">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="h-4 w-4" />
+              <p>{teamMembersError}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!loadingTeamMembers && teamMembers.length === 0 && !teamMembersError && (
         <Card className="glass">
           <CardContent className="pt-6">
             <p className="text-muted-foreground text-center">No team members found</p>
@@ -161,7 +182,7 @@ export default function Team() {
         </Card>
       )}
 
-      {teamMembers.length > 0 && (
+      {!loadingTeamMembers && teamMembers.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {teamMembers.map((member) => {
           const projectMetrics = getProjectMetrics(member);

@@ -87,16 +87,14 @@ export default function Register() {
       
       // Call register method (Requirements 5.2, 5.3, 5.4)
       await registerUser(data.email, data.password, data.name);
+      console.log("Se registro")
+
+      // Store email for confirmation page
+      localStorage.setItem("pending_email", data.email);
+      console.log("Se guardo en el localstorage")
       
-      // Check for intended URL (Requirement 3.4)
-      const intendedUrl = localStorage.getItem("intended_url");
-      if (intendedUrl) {
-        localStorage.removeItem("intended_url");
-        navigate(intendedUrl);
-      } else {
-        // Auto-login and redirect to dashboard on success
-        navigate("/");
-      }
+      // Redirect to email confirmation page
+      navigate("/confirm-email-pending", { state: { email: data.email } });
     } catch (error) {
       // Error is already handled in AuthContext and stored in error state
       console.error("Registration error:", error);
