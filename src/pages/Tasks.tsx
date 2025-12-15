@@ -29,14 +29,14 @@ import {
   updateTask as updateTaskAPI, 
   deleteTask as deleteTaskAPI, 
   listTasksBySprint,
-  listTasksWithoutSprint,
   Task as APITask,
   CreateTaskDto,
   UpdateTaskDto
 } from "@/api/tasks/tasks";
+import { listSprintsByProject, Sprint } from "@/api/sprints/sprints";
 
 export default function Tasks() {
-  const { teamMembers, sprints } = useApp();
+  const { teamMembers } = useApp();
   const { projects, selectedProject: currentProject } = useProjectContext();
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
@@ -48,6 +48,7 @@ export default function Tasks() {
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [tasks, setTasks] = useState<APITask[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [sprints, setSprints] = useState<Sprint[]>([]);
 
   const getToken = (): string | null => {
     const sessionData = localStorage.getItem('auth_session');
@@ -60,11 +61,12 @@ export default function Tasks() {
     }
   };
 
-  // Load tasks when project changes
+  // Load sprints and tasks when project changes
   useEffect(() => {
-    const loadTasks = async () => {
+    const loadSprintsAndTasks = async () => {
       if (!currentProject) {
         setTasks([]);
+        setSprints([]);
         return;
       }
 
@@ -76,31 +78,29 @@ export default function Tasks() {
           return;
         }
 
+        // Load sprints for the project
+        const projectSprints = await listSprintsByProject(token, currentProject.id);
+        setSprints(projectSprints);
+
         const allTasks: APITask[] = [];
         
         // Load tasks from all sprints
-        for (const sprint of sprints) {
-          if (sprint.projectId === currentProject.id) {
-            const sprintTasks = await listTasksBySprint(token, sprint.id);
-            allTasks.push(...sprintTasks);
-          }
+        for (const sprint of projectSprints) {
+          const sprintTasks = await listTasksBySprint(token, sprint.id);
+          allTasks.push(...sprintTasks);
         }
-        
-        // Load tasks without sprint
-        const tasksWithoutSprint = await listTasksWithoutSprint(token, currentProject.id);
-        allTasks.push(...tasksWithoutSprint);
         
         setTasks(allTasks);
       } catch (error) {
-        console.error("Failed to load tasks:", error);
-        toast.error("Failed to load tasks");
+        console.error("Failed to load sprints and tasks:", error);
+        toast.error("Failed to load sprints and tasks");
       } finally {
         setLoadingTasks(false);
       }
     };
 
-    loadTasks();
-  }, [currentProject, sprints]);
+    loadSprintsAndTasks();
+  }, [currentProject]);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -111,7 +111,7 @@ export default function Tasks() {
     assignedTo: "unassigned",
     dueDate: "",
     tags: "",
-    sprintId: "no-sprint",
+    sprintId: "",
     projectId: "",
   });
 
@@ -139,7 +139,7 @@ export default function Tasks() {
         assignedTo: "unassigned",
         dueDate: "",
         tags: "",
-        sprintId: "no-sprint",
+        sprintId: "",
         projectId: currentProject?.id || "",
       });
       setEditingTask(null);
@@ -171,6 +171,10 @@ export default function Tasks() {
 
     if (!formData.projectId) {
       errors.projectId = "Project is required";
+    }
+
+    if (!formData.sprintId) {
+      errors.sprintId = "Sprint is required";
     }
 
     if (formData.storyPoints < 0) {
@@ -242,12 +246,6 @@ export default function Tasks() {
           const sprintTasks = await listTasksBySprint(token, sprint.id);
           allTasks.push(...sprintTasks);
         }
-      }
-      
-      // Load tasks without sprint
-      if (currentProject) {
-        const tasksWithoutSprint = await listTasksWithoutSprint(token, currentProject.id);
-        allTasks.push(...tasksWithoutSprint);
       }
       
       setTasks(allTasks);
@@ -534,25 +532,29 @@ export default function Tasks() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Sprint</Label>
+                  <Label>Sprint *</Label>
                   <Select
-                    value={formData.sprintId || "no-sprint"}
+                    value={formData.sprintId}
                     onValueChange={(value) =>
-                      setFormData({ ...formData, sprintId: value === "no-sprint" ? "" : value })
+                      setFormData({ ...formData, sprintId: value })
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select sprint" />
+                      <SelectValue placeholder="Select a sprint" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="no-sprint">No Sprint</SelectItem>
-                      {sprints.map((sprint) => (
-                        <SelectItem key={sprint.id} value={sprint.id}>
-                          {sprint.name}
-                        </SelectItem>
-                      ))}
+                      {sprints
+                        .filter((sprint) => !currentProject || sprint.projectId === currentProject.id)
+                        .map((sprint) => (
+                          <SelectItem key={sprint.id} value={sprint.id}>
+                            {sprint.name}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
+                  {!formData.sprintId && (
+                    <p className="text-sm text-destructive">Sprint is required</p>
+                  )}
                 </div>
               </div>
 

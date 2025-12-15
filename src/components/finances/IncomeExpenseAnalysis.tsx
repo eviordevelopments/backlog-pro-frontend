@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import MockedDataIndicator from './MockedDataIndicator';
 import {
   BarChart,
   Bar,
@@ -108,9 +109,12 @@ export default function IncomeExpenseAnalysis() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">Income & Expense Analysis</h2>
-        <p className="text-muted-foreground mt-1">Project-level breakdown with cost segregation</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Income & Expense Analysis</h2>
+          <p className="text-muted-foreground mt-1">Project-level breakdown with cost segregation</p>
+        </div>
+        <MockedDataIndicator />
       </div>
 
       {/* Project Filter */}

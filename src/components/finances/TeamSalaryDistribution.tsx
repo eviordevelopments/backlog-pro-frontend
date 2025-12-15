@@ -10,6 +10,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 import { Users, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import MockedDataIndicator from "./MockedDataIndicator";
 
 interface TeamSalaryDistributionProps {
   operationalPercentage: number;
@@ -115,14 +116,17 @@ export default function TeamSalaryDistribution({
     return (
       <Card className="glass">
         <CardHeader>
-          <div className="flex items-center gap-3">
-            <Users className="w-5 h-5 text-purple-600" />
-            <div>
-              <CardTitle>Team Salary Distribution</CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
-                Distribute operational budget among team members
-              </p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <Users className="w-5 h-5 text-purple-600" />
+              <div>
+                <CardTitle>Team Salary Distribution</CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Distribute operational budget among team members
+                </p>
+              </div>
             </div>
+            <MockedDataIndicator />
           </div>
         </CardHeader>
         <CardContent>
@@ -137,14 +141,17 @@ export default function TeamSalaryDistribution({
   return (
     <Card className="glass">
       <CardHeader>
-        <div className="flex items-center gap-3">
-          <Users className="w-5 h-5 text-purple-600" />
-          <div>
-            <CardTitle>Team Salary Distribution</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">
-              Distribute operational budget ({operationalPercentage}%) among team members
-            </p>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Users className="w-5 h-5 text-purple-600" />
+            <div>
+              <CardTitle>Team Salary Distribution</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Distribute operational budget ({operationalPercentage}%) among team members
+              </p>
+            </div>
           </div>
+          <MockedDataIndicator />
         </div>
       </CardHeader>
       <CardContent className="space-y-6">

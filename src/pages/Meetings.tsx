@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Plus, Video, Users, Clock, Calendar as CalendarIcon, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import MeetingDialog from '@/components/meetings/MeetingDialog';
-import { createMeeting } from '@/api/meetings/meetings';
+import { createMeeting, getSprintMeetings, Meeting } from '@/api/meetings/meetings';
+import { listSprintsByProject, Sprint } from '@/api/sprints/sprints';
 
 interface MeetingItem {
   id: string;
@@ -38,23 +39,57 @@ export default function Meetings() {
     }
   };
 
-  // Load meetings from localStorage
+  // Load meetings from backend when project changes
   useEffect(() => {
-    const savedMeetings = localStorage.getItem('meetings');
-    if (savedMeetings) {
-      setMeetings(JSON.parse(savedMeetings));
-    }
-  }, []);
+    const loadMeetings = async () => {
+      if (!selectedProject) {
+        setMeetings([]);
+        return;
+      }
 
-  // Save meetings to localStorage
-  useEffect(() => {
-    localStorage.setItem('meetings', JSON.stringify(meetings));
-  }, [meetings]);
+      setLoading(true);
+      try {
+        const token = getToken();
+        if (!token) {
+          toast.error("No authentication token found");
+          return;
+        }
 
-  const handleAddMeeting = async (newMeeting: MeetingItem) => {
+        // Load sprints for the project
+        const projectSprints = await listSprintsByProject(token, selectedProject.id);
+        
+        const allMeetings: MeetingItem[] = [];
+        
+        // Load meetings from all sprints
+        for (const sprint of projectSprints) {
+          const sprintMeetings = await getSprintMeetings(token, sprint.id);
+          allMeetings.push(...sprintMeetings.map((meeting: Meeting) => ({
+            id: meeting.id,
+            title: meeting.title,
+            dateTime: meeting.dateTime || new Date().toISOString(),
+            duration: meeting.duration,
+            participants: meeting.participants || [],
+            status: (meeting.status as any) || 'scheduled',
+            type: (meeting.type as any) || 'other',
+          })));
+        }
+        
+        setMeetings(allMeetings);
+      } catch (error) {
+        console.error("Failed to load meetings:", error);
+        toast.error("Failed to load meetings");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadMeetings();
+  }, [selectedProject]);
+
+  const handleAddMeeting = async (newMeeting: any) => {
     const token = getToken();
     
-    if (token && user && selectedProject) {
+    if (token && user && selectedProject && newMeeting.sprintId) {
       try {
         setLoading(true);
         
@@ -67,6 +102,7 @@ export default function Meetings() {
           ownerId: user.id,
           participants: newMeeting.participants,
           projectId: selectedProject.id,
+          sprintId: newMeeting.sprintId,
         });
         
         toast.success('Meeting created successfully');

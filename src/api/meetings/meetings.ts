@@ -1,60 +1,11 @@
 import { API_CONFIG } from '@/config/api';
 
-export interface Meeting {
-  id: string;
-  title: string;
-  type: 'planning' | 'review' | 'retrospective' | 'standup' | 'other';
-  dateTime: string;
-  duration: number;
-  ownerId: string;
-  participants: string[];
-  agenda?: string;
-  notes?: string;
-  projectId?: string;
-  sprintId?: string;
-  isRecurring: boolean;
-  recurringPattern?: string;
-  status: 'scheduled' | 'in-progress' | 'completed' | 'cancelled';
-  attendance: string[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CreateMeetingDto {
-  title: string;
-  type: 'planning' | 'review' | 'retrospective' | 'standup' | 'other';
-  dateTime: string;
-  duration: number;
-  ownerId: string;
-  participants: string[];
-  agenda?: string;
-  notes?: string;
-  projectId?: string;
-  sprintId?: string;
-  isRecurring?: boolean;
-  recurringPattern?: string;
-}
-
-export interface UpdateMeetingDto {
-  title?: string;
-  type?: 'planning' | 'review' | 'retrospective' | 'standup' | 'other';
-  dateTime?: string;
-  duration?: number;
-  agenda?: string;
-  notes?: string;
-  participants?: string[];
-  status?: 'scheduled' | 'in-progress' | 'completed' | 'cancelled';
-  isRecurring?: boolean;
-  recurringPattern?: string;
-}
-
 const CREATE_MEETING_MUTATION = `
   mutation CreateMeeting($input: CreateMeetingDto!) {
     createMeeting(input: $input) {
       id
       title
       type
-      dateTime
       duration
       ownerId
       participants
@@ -66,8 +17,6 @@ const CREATE_MEETING_MUTATION = `
       recurringPattern
       status
       attendance
-      createdAt
-      updatedAt
     }
   }
 `;
@@ -78,7 +27,6 @@ const GET_SPRINT_MEETINGS_QUERY = `
       id
       title
       type
-      dateTime
       duration
       ownerId
       participants
@@ -86,7 +34,6 @@ const GET_SPRINT_MEETINGS_QUERY = `
       notes
       status
       attendance
-      createdAt
     }
   }
 `;
@@ -97,7 +44,6 @@ const UPDATE_MEETING_MUTATION = `
       id
       title
       type
-      dateTime
       duration
       agenda
       notes
@@ -106,7 +52,6 @@ const UPDATE_MEETING_MUTATION = `
       isRecurring
       recurringPattern
       attendance
-      updatedAt
     }
   }
 `;
@@ -117,7 +62,59 @@ const DELETE_MEETING_MUTATION = `
   }
 `;
 
-export async function createMeeting(token: string, input: CreateMeetingDto): Promise<Meeting> {
+export interface Meeting {
+  id: string;
+  title: string;
+  type: string;
+  dateTime?: string;
+  duration: number;
+  ownerId: string;
+  participants: string[];
+  agenda?: string;
+  notes?: string;
+  projectId?: string;
+  sprintId?: string;
+  isRecurring?: boolean;
+  recurringPattern?: string;
+  status: string;
+  attendance?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateMeetingDto {
+  title: string;
+  type: string;
+  dateTime: string;
+  duration: number;
+  ownerId: string;
+  participants: string[];
+  agenda?: string;
+  notes?: string;
+  projectId: string;
+  sprintId?: string;
+  isRecurring?: boolean;
+  recurringPattern?: string;
+}
+
+export interface UpdateMeetingDto {
+  title?: string;
+  type?: string;
+  dateTime?: string;
+  duration?: number;
+  agenda?: string;
+  notes?: string;
+  participants?: string[];
+  status?: string;
+  isRecurring?: boolean;
+  recurringPattern?: string;
+  attendance?: string[];
+}
+
+export async function createMeeting(
+  token: string,
+  input: CreateMeetingDto
+): Promise<Meeting> {
   try {
     const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
@@ -151,7 +148,10 @@ export async function createMeeting(token: string, input: CreateMeetingDto): Pro
   }
 }
 
-export async function getSprintMeetings(token: string, sprintId: string): Promise<Meeting[]> {
+export async function getSprintMeetings(
+  token: string,
+  sprintId: string
+): Promise<Meeting[]> {
   try {
     const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
@@ -181,7 +181,11 @@ export async function getSprintMeetings(token: string, sprintId: string): Promis
   }
 }
 
-export async function updateMeeting(token: string, id: string, input: UpdateMeetingDto): Promise<Meeting> {
+export async function updateMeeting(
+  token: string,
+  id: string,
+  input: UpdateMeetingDto
+): Promise<Meeting> {
   try {
     const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',
@@ -215,7 +219,10 @@ export async function updateMeeting(token: string, id: string, input: UpdateMeet
   }
 }
 
-export async function deleteMeeting(token: string, id: string): Promise<boolean> {
+export async function deleteMeeting(
+  token: string,
+  id: string
+): Promise<boolean> {
   try {
     const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
       method: 'POST',

@@ -7,16 +7,12 @@ const CREATE_SPRINT_MUTATION = `
       name
       goal
       projectId
-      startDate
-      endDate
       status
       velocity
       storyPointsCommitted
       storyPointsCompleted
       teamMembers
       dailyStandupTime
-      createdAt
-      updatedAt
     }
   }
 `;
@@ -28,20 +24,13 @@ const GET_SPRINT_QUERY = `
       name
       goal
       projectId
-      startDate
-      endDate
       status
       velocity
       storyPointsCommitted
       storyPointsCompleted
       teamMembers
-      sprintPlanningDate
-      sprintReviewDate
-      sprintRetrospectiveDate
       dailyStandupTime
       retrospectiveNotes
-      createdAt
-      updatedAt
     }
   }
 `;
@@ -52,6 +41,7 @@ const LIST_SPRINTS_BY_PROJECT_QUERY = `
       id
       name
       goal
+      projectId
       status
       velocity
       storyPointsCommitted
@@ -66,7 +56,6 @@ const UPDATE_SPRINT_MUTATION = `
       id
       name
       goal
-      endDate
       status
       velocity
       storyPointsCommitted
@@ -74,7 +63,6 @@ const UPDATE_SPRINT_MUTATION = `
       teamMembers
       dailyStandupTime
       retrospectiveNotes
-      updatedAt
     }
   }
 `;
@@ -84,9 +72,7 @@ const EXTEND_SPRINT_MUTATION = `
     extendSprint(id: $id, newEndDate: $newEndDate) {
       id
       name
-      endDate
       status
-      updatedAt
     }
   }
 `;
@@ -99,7 +85,6 @@ const COMPLETE_SPRINT_MUTATION = `
       status
       velocity
       storyPointsCompleted
-      updatedAt
     }
   }
 `;
@@ -110,8 +95,6 @@ const REGISTER_RETROSPECTIVE_MUTATION = `
       id
       name
       retrospectiveNotes
-      sprintRetrospectiveDate
-      updatedAt
     }
   }
 `;
@@ -266,7 +249,14 @@ export async function listSprintsByProject(
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    return result.data?.listSprintsByProject || [];
+    const sprints = result.data?.listSprintsByProject || [];
+    
+    // Provide default dates if not available
+    return sprints.map((sprint: any) => ({
+      ...sprint,
+      startDate: sprint.startDate || new Date().toISOString().split('T')[0],
+      endDate: sprint.endDate || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    }));
   } catch (error) {
     throw error;
   }

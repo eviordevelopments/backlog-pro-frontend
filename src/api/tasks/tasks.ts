@@ -16,9 +16,6 @@ const CREATE_TASK_MUTATION = `
       assignedTo
       tags
       dependencies
-      dueDate
-      createdAt
-      updatedAt
     }
   }
 `;
@@ -37,11 +34,8 @@ const GET_TASK_QUERY = `
       estimatedHours
       actualHours
       storyPoints
-      dueDate
       tags
       dependencies
-      createdAt
-      updatedAt
     }
   }
 `;
@@ -60,39 +54,11 @@ const LIST_TASKS_BY_SPRINT_QUERY = `
       estimatedHours
       actualHours
       storyPoints
-      dueDate
       tags
       dependencies
-      createdAt
-      updatedAt
     }
   }
 `;
-
-const LIST_TASKS_WITHOUT_SPRINT_QUERY = `
-  query ListTasksWithoutSprint($projectId: String!) {
-    listTasksWithoutSprint(projectId: $projectId) {
-      id
-      title
-      description
-      projectId
-      sprintId
-      status
-      priority
-      assignedTo
-      estimatedHours
-      actualHours
-      storyPoints
-      dueDate
-      tags
-      dependencies
-      createdAt
-      updatedAt
-    }
-  }
-`;
-
-
 
 const UPDATE_TASK_MUTATION = `
   mutation UpdateTask($taskId: String!, $input: UpdateTaskDto!) {
@@ -104,9 +70,7 @@ const UPDATE_TASK_MUTATION = `
       priority
       estimatedHours
       storyPoints
-      dueDate
       tags
-      updatedAt
     }
   }
 `;
@@ -298,41 +262,6 @@ export async function listTasksBySprint(
     throw error;
   }
 }
-
-export async function listTasksWithoutSprint(
-  token: string,
-  projectId: string
-): Promise<Task[]> {
-  try {
-    const response = await fetch(API_CONFIG.GRAPHQL_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        query: LIST_TASKS_WITHOUT_SPRINT_QUERY,
-        variables: { projectId },
-      }),
-    });
-
-    const result = await response.json();
-
-    if (result.errors) {
-      throw new Error(result.errors[0]?.message || 'Failed to list tasks');
-    }
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    return result.data?.listTasksWithoutSprint || [];
-  } catch (error) {
-    throw error;
-  }
-}
-
-
 
 export async function updateTask(
   token: string,

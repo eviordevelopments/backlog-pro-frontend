@@ -2,12 +2,37 @@ import { useState, useEffect } from "react";
 import { useProjectContext } from "@/context/ProjectContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DollarSign, TrendingUp, Wallet } from "lucide-react";
+import { DollarSign, TrendingUp, Wallet, AlertCircle } from "lucide-react";
 import TransactionsTab from "../components/finances/TransactionsTab";
 import InvoicesTab from "../components/finances/InvoicesTab";
 import ReportsTab from "../components/finances/ReportsTab";
 import ProfitDistributionTab from "../components/finances/ProfitDistributionTab";
+import ProfitSharingCalculator from "../components/finances/ProfitSharingCalculator";
+import TeamSalaryDistribution from "../components/finances/TeamSalaryDistribution";
+import IncomeExpenseAnalysis from "../components/finances/IncomeExpenseAnalysis";
+import FinancialMetrics from "../components/finances/FinancialMetrics";
+import FinancesOverview from "../components/finances/FinancesOverview";
+import CalculatedSalaries from "../components/finances/CalculatedSalaries";
 import { useFinances } from "@/hooks/use-finances";
+
+interface TabConfig {
+  value: string;
+  label: string;
+  isMocked: boolean;
+}
+
+const TAB_CONFIGS: TabConfig[] = [
+  { value: "overview", label: "Overview", isMocked: false },
+  { value: "transactions", label: "Transactions", isMocked: false },
+  { value: "invoices", label: "Invoices", isMocked: false },
+  { value: "distribution", label: "Distribution", isMocked: false },
+  { value: "profit-sharing", label: "Profit Sharing", isMocked: true },
+  { value: "team-salary", label: "Team Salary", isMocked: true },
+  { value: "income-expense", label: "Income/Expense", isMocked: true },
+  { value: "metrics", label: "Metrics", isMocked: true },
+  { value: "calculated-salaries", label: "Salaries", isMocked: true },
+  { value: "reports", label: "Reports", isMocked: false },
+];
 
 export default function Finances() {
   const { selectedProject: currentProject } = useProjectContext();
@@ -19,7 +44,6 @@ export default function Finances() {
     netProfit: 0,
     profitMargin: 0,
   });
-  const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [totalRevenue, setTotalRevenue] = useState(0);
 
   useEffect(() => {
@@ -43,6 +67,20 @@ export default function Finances() {
     }).format(value);
   };
 
+  const renderTabTrigger = (config: TabConfig) => (
+    <div className="flex items-center gap-2">
+      <TabsTrigger value={config.value} className="relative">
+        {config.label}
+        {config.isMocked && (
+          <div 
+            className="absolute -top-1 -right-1 w-2 h-2 bg-destructive rounded-full"
+            title="Datos mockeados - Implementación pendiente"
+          />
+        )}
+      </TabsTrigger>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <div>
@@ -52,6 +90,12 @@ export default function Finances() {
             ? `Financial management for ${currentProject.name}` 
             : "Manage your financial data and metrics"}
         </p>
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <AlertCircle className="w-4 h-4 text-destructive" />
+        <span>Punto rojo = Datos mockeados (pendiente implementación)</span>
       </div>
 
       {currentProject && (
@@ -91,13 +135,22 @@ export default function Finances() {
         </div>
       )}
 
-      <Tabs defaultValue="transactions" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="transactions">Transactions</TabsTrigger>
-          <TabsTrigger value="invoices">Invoices</TabsTrigger>
-          <TabsTrigger value="distribution">Distribution</TabsTrigger>
-          <TabsTrigger value="reports">Reports</TabsTrigger>
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList className="flex w-full overflow-x-auto bg-muted/50 p-1 rounded-lg gap-1 flex-wrap">
+          {TAB_CONFIGS.map((config) => renderTabTrigger(config))}
         </TabsList>
+
+        <TabsContent value="overview" className="space-y-4">
+          {currentProject ? (
+            <FinancesOverview />
+          ) : (
+            <Card className="glass">
+              <CardContent className="pt-6">
+                <p className="text-muted-foreground">Select a project to view financial overview</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
 
         <TabsContent value="transactions" className="space-y-4">
           {currentProject ? (
@@ -127,13 +180,52 @@ export default function Finances() {
           {currentProject ? (
             <ProfitDistributionTab 
               projectId={currentProject.id} 
-              teamMembers={teamMembers}
+              teamMembers={[]}
               totalRevenue={totalRevenue}
             />
           ) : (
             <Card className="glass">
               <CardContent className="pt-6">
                 <p className="text-muted-foreground">Select a project to manage profit distribution</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="profit-sharing" className="space-y-4">
+          <ProfitSharingCalculator />
+        </TabsContent>
+
+        <TabsContent value="team-salary" className="space-y-4">
+          {currentProject ? (
+            <TeamSalaryDistribution 
+              operationalPercentage={50}
+              totalRevenue={metrics.budget}
+            />
+          ) : (
+            <Card className="glass">
+              <CardContent className="pt-6">
+                <p className="text-muted-foreground">Select a project to manage team salary distribution</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="income-expense" className="space-y-4">
+          <IncomeExpenseAnalysis />
+        </TabsContent>
+
+        <TabsContent value="metrics" className="space-y-4">
+          <FinancialMetrics />
+        </TabsContent>
+
+        <TabsContent value="calculated-salaries" className="space-y-4">
+          {currentProject ? (
+            <CalculatedSalaries operationalBudget={metrics.budget * 0.5} />
+          ) : (
+            <Card className="glass">
+              <CardContent className="pt-6">
+                <p className="text-muted-foreground">Select a project to view calculated salaries</p>
               </CardContent>
             </Card>
           )}

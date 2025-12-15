@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useProjectContext } from '@/context/ProjectContext';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -20,6 +21,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { X } from 'lucide-react';
+import { listSprintsByProject, Sprint } from '@/api/sprints/sprints';
 
 interface MeetingDialogProps {
   isOpen: boolean;
@@ -28,6 +30,7 @@ interface MeetingDialogProps {
 }
 
 export default function MeetingDialog({ isOpen, onClose, onSave }: MeetingDialogProps) {
+  const { projects, selectedProject: currentProject } = useProjectContext();
   const [title, setTitle] = useState('');
   const [type, setType] = useState<'sprint_planning' | 'sprint_review' | 'retrospective' | 'standup' | 'other'>('other');
   const [dateTime, setDateTime] = useState('');
@@ -35,6 +38,49 @@ export default function MeetingDialog({ isOpen, onClose, onSave }: MeetingDialog
   const [participants, setParticipants] = useState<string[]>([]);
   const [participantInput, setParticipantInput] = useState('');
   const [meetLink, setMeetLink] = useState('');
+  const [projectId, setProjectId] = useState(currentProject?.id || '');
+  const [sprintId, setSprintId] = useState('');
+  const [sprints, setSprints] = useState<Sprint[]>([]);
+
+  const getToken = (): string | null => {
+    const sessionData = localStorage.getItem('auth_session');
+    if (!sessionData) return null;
+    try {
+      const session = JSON.parse(sessionData);
+      return session.accessToken;
+    } catch {
+      return null;
+    }
+  };
+
+  // Load sprints when project changes
+  useEffect(() => {
+    const loadSprints = async () => {
+      if (!projectId) {
+        setSprints([]);
+        return;
+      }
+
+      try {
+        const token = getToken();
+        if (!token) return;
+
+        const projectSprints = await listSprintsByProject(token, projectId);
+        setSprints(projectSprints);
+      } catch (error) {
+        console.error('Failed to load sprints:', error);
+      }
+    };
+
+    loadSprints();
+  }, [projectId]);
+
+  // Update projectId when currentProject changes
+  useEffect(() => {
+    if (currentProject) {
+      setProjectId(currentProject.id);
+    }
+  }, [currentProject]);
 
   const handleAddParticipant = () => {
     if (participantInput.trim() && !participants.includes(participantInput.trim())) {
@@ -48,7 +94,7 @@ export default function MeetingDialog({ isOpen, onClose, onSave }: MeetingDialog
   };
 
   const handleSave = () => {
-    if (!title.trim() || !dateTime) {
+    if (!title.trim() || !dateTime || !projectId || !sprintId) {
       alert('Please fill in all required fields');
       return;
     }
@@ -62,6 +108,8 @@ export default function MeetingDialog({ isOpen, onClose, onSave }: MeetingDialog
       participants,
       meetLink: meetLink.trim() || undefined,
       status: 'scheduled' as const,
+      projectId,
+      sprintId,
     };
 
     onSave(newMeeting);
@@ -76,6 +124,7 @@ export default function MeetingDialog({ isOpen, onClose, onSave }: MeetingDialog
     setParticipants([]);
     setParticipantInput('');
     setMeetLink('');
+    setSprintId('');
     onClose();
   };
 
@@ -90,6 +139,46 @@ export default function MeetingDialog({ isOpen, onClose, onSave }: MeetingDialog
         </DialogHeader>
 
         <div className="space-y-3 px-1">
+          {/* Project and Sprint Row */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* Project */}
+            <div className="space-y-1.5">
+              <Label htmlFor="project" className="text-sm">Project *</Label>
+              <Select value={projectId} onValueChange={setProjectId}>
+                <SelectTrigger id="project" className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Sprint */}
+            <div className="space-y-1.5">
+              <Label htmlFor="sprint" className="text-sm">Sprint *</Label>
+              <Select value={sprintId} onValueChange={setSprintId}>
+                <SelectTrigger id="sprint" className="h-9">
+                  <SelectValue placeholder="Select sprint" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sprints.map((sprint) => (
+                    <SelectItem key={sprint.id} value={sprint.id}>
+                      {sprint.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!sprintId && (
+                <p className="text-xs text-destructive">Sprint is required</p>
+              )}
+            </div>
+          </div>
+
           {/* Title */}
           <div className="space-y-1.5">
             <Label htmlFor="title" className="text-sm">Meeting Title *</Label>

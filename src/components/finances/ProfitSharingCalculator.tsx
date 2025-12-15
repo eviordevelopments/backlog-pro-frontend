@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import MockedDataIndicator from './MockedDataIndicator';
 import {
   PieChart,
   Pie,
@@ -121,9 +122,12 @@ export default function ProfitSharingCalculator() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">Profit Sharing Calculator</h2>
-        <p className="text-muted-foreground mt-1">50% Salaries / 50% Profit Distribution</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Profit Sharing Calculator</h2>
+          <p className="text-muted-foreground mt-1">50% Salaries / 50% Profit Distribution</p>
+        </div>
+        <MockedDataIndicator />
       </div>
 
       {/* Revenue Input */}

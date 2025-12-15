@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useApp } from '@/context/AppContext';
+import MockedDataIndicator from './MockedDataIndicator';
 
 interface MetricData {
   month: string;
@@ -101,9 +102,12 @@ export default function FinancialMetrics() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">Financial Metrics</h2>
-        <p className="text-muted-foreground mt-1">Key performance indicators for business health</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Financial Metrics</h2>
+          <p className="text-muted-foreground mt-1">Key performance indicators for business health</p>
+        </div>
+        <MockedDataIndicator />
       </div>
 
       {/* Metrics Cards */}
