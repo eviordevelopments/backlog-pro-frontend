@@ -246,7 +246,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return;
       }
 
-      // Auto-login user after successful registration (Requirement 5.4)
       const newUser: User = {
         id: response.userId,
         email: response.email,
@@ -254,15 +253,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         createdAt: new Date().toISOString(),
       };
 
-      // Store session data
       const session: Session = {
         user: newUser,
         accessToken: response.token || "",
-        expiresAt: Date.now() + 3600000, // 1 hour expiration
+        expiresAt: Date.now() + 3600000,
       };
       localStorage.setItem("auth_session", JSON.stringify(session));
 
-      // Update user state
       setUser(newUser);
       setToken(response.token || "");
     } catch (error) {

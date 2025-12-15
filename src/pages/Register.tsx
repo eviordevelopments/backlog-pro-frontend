@@ -3,7 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Eye, EyeOff, UserPlus } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { AuthErrorDisplay } from "@/components/auth/AuthErrorDisplay";
 import { Spinner } from "@/components/ui/spinner";
@@ -83,20 +83,12 @@ export default function Register() {
   const onSubmit = async (data: RegisterFormValues) => {
     try {
       setIsLoading(true);
-      clearError(); // Clear any previous errors
+      clearError();
       
-      // Call register method (Requirements 5.2, 5.3, 5.4)
       await registerUser(data.email, data.password, data.name);
-      console.log("Se registro")
-
-      // Store email for confirmation page
-      localStorage.setItem("pending_email", data.email);
-      console.log("Se guardo en el localstorage")
       
-      // Redirect to email confirmation page
-      navigate("/confirm-email-pending", { state: { email: data.email } });
+      navigate("/");
     } catch (error) {
-      // Error is already handled in AuthContext and stored in error state
       console.error("Registration error:", error);
     } finally {
       setIsLoading(false);

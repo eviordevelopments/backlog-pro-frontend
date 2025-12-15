@@ -14,8 +14,6 @@ import { AppLayout } from "./components/layout/AppLayout";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
-import ConfirmEmailPending from "./pages/ConfirmEmailPending";
-import ConfirmEmail from "./pages/ConfirmEmail";
 import Profile from "./pages/Profile";
 import Projects from "./pages/Projects";
 import Dashboard from "./pages/Dashboard";
@@ -51,8 +49,6 @@ const AppRoutes = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/confirm-email-pending" element={<ConfirmEmailPending />} />
-        <Route path="/confirm-email" element={<ConfirmEmail />} />
         
         {/* Protected routes */}
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
